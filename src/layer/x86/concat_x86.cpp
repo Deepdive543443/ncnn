@@ -658,6 +658,8 @@ int Concat_x86::forward(const std::vector<Mat>& bottom_blobs, std::vector<Mat>& 
                     p += 4;
                 }
             }
+
+            // HAHA
             if (bottom_blob.elempack == elempack) // 1-1 4-4 8-8
             {
                 int size = bottom_blob.total();
