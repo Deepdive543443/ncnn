@@ -14,8 +14,15 @@ Concat_x86::Concat_x86()
 
 int Concat_x86::forward(const std::vector<Mat>& bottom_blobs, std::vector<Mat>& top_blobs, const Option& opt) const
 {
+
+
+    NCNN_LOGE("num bottom_blobs: %ld num top_blobs: %ld", bottom_blobs.size(), top_blobs.size());
     int dims = bottom_blobs[0].dims;
     int positive_axis = axis < 0 ? dims + axis : axis;
+
+    for (const Mat &mat : bottom_blobs) {
+        NCNN_LOGE("c: %d h: %d w: %d pack: %d", mat.c, mat.h, mat.w, mat.elempack);
+    }
 
     if (dims == 1) // positive_axis == 0
     {
@@ -666,6 +673,10 @@ int Concat_x86::forward(const std::vector<Mat>& bottom_blobs, std::vector<Mat>& 
 
                 const float* ptr = bottom_blob;
                 float* outptr = top_blob_unpacked.channel(p);
+                
+                NCNN_LOGE("bottom_blob.total() %d", size);
+                NCNN_LOGE("outptr %p ptr %p", outptr, ptr);
+                
                 memcpy(outptr, ptr, size * bottom_blob.elemsize);
 
                 p += bottom_blob.c;
@@ -811,6 +822,11 @@ int Concat_x86::forward(const std::vector<Mat>& bottom_blobs, std::vector<Mat>& 
                 outptr += size * elempack;
             }
         }
+    }
+
+    NCNN_LOGE("top_blobs output:");
+    for (const Mat &mat : top_blobs) {
+        NCNN_LOGE("c: %d h: %d w: %d pack: %d", mat.c, mat.h, mat.w, mat.elempack);
     }
 
     return 0;
