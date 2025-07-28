@@ -399,6 +399,8 @@ int Concat_x86::forward(const std::vector<Mat>& bottom_blobs, std::vector<Mat>& 
         for (size_t b = 0; b < bottom_blobs.size(); b++)
         {
             const Mat& bottom_blob = bottom_blobs[b];
+            if (bottom_blob.w != w || bottom_blob.h != h || bottom_blob.d != d) return -100;
+
             elemsize = std::min(elemsize, bottom_blob.elemsize);
             elempack = std::min(elempack, bottom_blob.elempack);
             top_channels += bottom_blob.c * bottom_blob.elempack;
