@@ -218,10 +218,13 @@ int Concat_riscv::forward(const std::vector<Mat>& bottom_blobs, std::vector<Mat>
         // total channels
         size_t elemsize = bottom_blobs[0].elemsize;
         int elempack = bottom_blobs[0].elempack;
-        int top_channels = 0;
-        for (size_t b = 0; b < bottom_blobs.size(); b++)
+        int top_channels = bottom_blobs[0].c * bottom_blobs[0].elempack;
+        for (size_t b = 1; b < bottom_blobs.size(); b++)
         {
             const Mat& bottom_blob = bottom_blobs[b];
+            if (bottom_blob.w != w || bottom_blob.h != h || bottom_blob.d != d)
+                return -100;
+
             elemsize = std::min(elemsize, bottom_blob.elemsize);
             elempack = std::min(elempack, bottom_blob.elempack);
             top_channels += bottom_blob.c * bottom_blob.elempack;
