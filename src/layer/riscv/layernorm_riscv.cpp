@@ -16,13 +16,12 @@
 
 #if __riscv_vector
 #include <riscv_vector.h>
-#endif // __riscv_vector
-
 #include "riscv_usability.h"
+#endif // __riscv_vector
 
 namespace ncnn {
 
-#if __riscv_vector && __riscv_zfh
+#if NCNN_ZFH
 #include "layernorm_rvv_fp16.h"
 #endif
 
@@ -41,8 +40,8 @@ static inline int layernorm_rvv_pack1_procedure(int size, float* ptr, const floa
 {
     float sum = 0.f;
     float sqsum = 0.f;
-    vfloat32m1_t _sum = __riscv_vfmv_s_f_f32m1(__riscv_vundefined_f32m1(), 0.f, __riscv_vsetvlmax_e32m1());
-    vfloat32m1_t _sqsum = __riscv_vfmv_s_f_f32m1(__riscv_vundefined_f32m1(), 0.f, __riscv_vsetvlmax_e32m1());
+    vfloat32m1_t _sum = __riscv_vfmv_s_f_f32m1(0.f, __riscv_vsetvlmax_e32m1());
+    vfloat32m1_t _sqsum = __riscv_vfmv_s_f_f32m1(0.f, __riscv_vsetvlmax_e32m1());
     {
         int n = size;
         float* ptr_sum = ptr;
@@ -50,7 +49,7 @@ static inline int layernorm_rvv_pack1_procedure(int size, float* ptr, const floa
         {
             size_t vl = __riscv_vsetvl_e32m8(n);
             vfloat32m8_t _p = __riscv_vle32_v_f32m8(ptr_sum, vl);
-            _sum = __riscv_vfredusum_vs_f32m8_f32m1(_sum, _p, /* scalar */ _sum, vl);
+            _sum = __riscv_vfredusum_vs_f32m8_f32m1(_p, _sum, vl);
             // _sqsum = vfredusum_vs_f32m8_f32m1(_sqsum, vfmul_vv_f32m8(_p, _p, vl), /* scalar */ _sqsum, vl);
             ptr_sum += vl;
             n -= vl;
@@ -67,7 +66,7 @@ static inline int layernorm_rvv_pack1_procedure(int size, float* ptr, const floa
             size_t vl = __riscv_vsetvl_e32m8(n);
             vfloat32m8_t _p = __riscv_vle32_v_f32m8(ptr_sqsum, vl);
             _p = __riscv_vfsub_vf_f32m8(_p, mean, vl);
-            _sqsum = __riscv_vfredusum_vs_f32m8_f32m1(_sqsum, __riscv_vfmul_vv_f32m8(_p, _p, vl), /* scalar */ _sqsum, vl);
+            _sqsum = __riscv_vfredusum_vs_f32m8_f32m1(__riscv_vfmul_vv_f32m8(_p, _p, vl), _sqsum, vl);
             n -= vl;
             ptr_sqsum += vl;
         }

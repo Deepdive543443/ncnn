@@ -13,20 +13,27 @@
 // specific language governing permissions and limitations under the License.
 
 // fp16s
+#ifndef __fp16
+#define __fp16 _Float16
+#endif
+
+#include <riscv_vector.h>
+#include "riscv_usability.h"
+
 static inline int layernorm_rvv_pack1_fp16s_procedure(int size, __fp16* ptr, const float* gamma_data, const float* beta_data, float eps, int affine)
 {
     float sum = 0.f;
     float sqsum = 0.f;
-    vfloat32m1_t _sum = __riscv_vfmv_s_f_f32m1(vundefined_f32m1(), 0.f, vsetvlmax_e32m1());
-    vfloat32m1_t _sqsum = __riscv_vfmv_s_f_f32m1(vundefined_f32m1(), 0.f, vsetvlmax_e32m1());
+    vfloat32m1_t _sum = __riscv_vfmv_s_f_f32m1(0.f, __riscv_vsetvlmax_e32m1());
+    vfloat32m1_t _sqsum = __riscv_vfmv_s_f_f32m1(0.f, __riscv_vsetvlmax_e32m1());
     {
         int n = size;
         __fp16* ptr_sum = ptr;
         while (n > 0)
         {
             size_t vl = __riscv_vsetvl_e16m4(n);
-            vfloat32m8_t _p = __riscv_vfwcvt_f_f_v_f32m8(vle16_v_f16m4(ptr_sum, vl), vl);
-            _sum = __riscv_vfredusum_vs_f32m8_f32m1(_sum, _p, /* scalar */ _sum, vl);
+            vfloat32m8_t _p = __riscv_vfwcvt_f_f_v_f32m8(__riscv_vle16_v_f16m4(ptr_sum, vl), vl);
+            _sum = __riscv_vfredusum_vs_f32m8_f32m1(_p, /* scalar */ _sum, vl);
             // _sqsum = vfredusum_vs_f32m8_f32m1(_sqsum, vfmul_vv_f32m8(_p, _p, vl), /* scalar */ _sqsum, vl);
             ptr_sum += vl;
             n -= vl;
@@ -41,9 +48,9 @@ static inline int layernorm_rvv_pack1_fp16s_procedure(int size, __fp16* ptr, con
         while (n > 0)
         {
             size_t vl = __riscv_vsetvl_e16m4(n);
-            vfloat32m8_t _p = __riscv_vfwcvt_f_f_v_f32m8(vle16_v_f16m4(ptr_sqsum, vl), vl);
+            vfloat32m8_t _p = __riscv_vfwcvt_f_f_v_f32m8(__riscv_vle16_v_f16m4(ptr_sqsum, vl), vl);
             _p = __riscv_vfsub_vf_f32m8(_p, mean, vl);
-            _sqsum = __riscv_vfredusum_vs_f32m8_f32m1(_sqsum, __riscv_vfmul_vv_f32m8(_p, _p, vl), /* scalar */ _sqsum, vl);
+            _sqsum = __riscv_vfredusum_vs_f32m8_f32m1(__riscv_vfmul_vv_f32m8(_p, _p, vl), _sqsum, vl);
             n -= vl;
             ptr_sqsum += vl;
         }
@@ -153,8 +160,8 @@ static inline int layernorm_rvv_pack1_fp16sa_procedure(int size, __fp16* ptr, co
 {
     __fp16 sum = 0.f;
     __fp16 sqsum = 0.f;
-    vfloat16m1_t _sum = __riscv_vfmv_s_f_f16m1(__riscv_vundefined_f16m1(), 0.f, __riscv_vsetvlmax_e32m1());
-    vfloat16m1_t _sqsum = __riscv_vfmv_s_f_f16m1(__riscv_vundefined_f16m1(), 0.f, __riscv_vsetvlmax_e32m1());
+    vfloat16m1_t _sum = __riscv_vfmv_s_f_f16m1(0.f, __riscv_vsetvlmax_e32m1());
+    vfloat16m1_t _sqsum = __riscv_vfmv_s_f_f16m1(0.f, __riscv_vsetvlmax_e32m1());
     {
         int n = size;
         __fp16* ptr_sum = ptr;
@@ -162,7 +169,7 @@ static inline int layernorm_rvv_pack1_fp16sa_procedure(int size, __fp16* ptr, co
         {
             size_t vl = __riscv_vsetvl_e16m8(n);
             vfloat16m8_t _p = __riscv_vle16_v_f16m8(ptr_sum, vl);
-            _sum = __riscv_vfredusum_vs_f16m8_f16m1(_sum, _p, /* scalar */ _sum, vl);
+            _sum = __riscv_vfredusum_vs_f16m8_f16m1(_p, _sum, vl);
             // _sqsum = vfredusum_vs_f32m8_f32m1(_sqsum, vfmul_vv_f32m8(_p, _p, vl), /* scalar */ _sqsum, vl);
             ptr_sum += vl;
             n -= vl;
@@ -179,7 +186,7 @@ static inline int layernorm_rvv_pack1_fp16sa_procedure(int size, __fp16* ptr, co
             size_t vl = __riscv_vsetvl_e16m8(n);
             vfloat16m8_t _p = __riscv_vle16_v_f16m8(ptr_sqsum, vl);
             _p = __riscv_vfsub_vf_f16m8(_p, mean, vl);
-            _sqsum = __riscv_vfredusum_vs_f16m8_f16m1(_sqsum, __riscv_vfmul_vv_f16m8(_p, _p, vl), /* scalar */ _sqsum, vl);
+            _sqsum = __riscv_vfredusum_vs_f16m8_f16m1(__riscv_vfmul_vv_f16m8(_p, _p, vl), _sqsum, vl);
             n -= vl;
             ptr_sqsum += vl;
         }
