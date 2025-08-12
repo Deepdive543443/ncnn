@@ -145,8 +145,6 @@ static inline int layernorm_rvv_packn_fp16s_procedure(int size, __fp16* ptr, con
     return 0;
 }
 
-// fp16sa
-
 static inline int layernorm_rvv_pack1_fp16sa_procedure(int size, __fp16* ptr, const float* gamma_data, const float* beta_data, float eps, int affine)
 {
     __fp16 sum = 0.f;
@@ -280,6 +278,33 @@ static inline int layernorm_rvv_packn_fp16sa_procedure(int size, __fp16* ptr, co
 
     return 0;
 }
+#else
+static inline int layernorm_scaler_fp16s_procedure(int size, __fp16* ptr, const float* gamma_data, const float* beta_data, float eps, int affine)
+{
+    __fp16 sum = 0.f, sqsum = 0.f, *gamma_data_fp16 = (__fp16*)gamma_data, *beta_data_fp16 = (__fp16*)beta_data;
+
+    for (int i = 0; i < size; i++) sum += ptr[i];
+
+    __fp16 mean = sum / size;
+    __fp16 tmp = 0.f;
+    for (int i = 0; i < size; i++)
+    {
+        tmp = ptr[i] - mean;
+        sqsum += tmp * tmp;
+    }
+
+    __fp16 var = sqsum / size;
+    __fp16 a = static_cast<__fp16>(1.f / (sqrt(var + eps)));
+    __fp16 b = -mean * a;
+
+    if (affine)
+        for (int i = 0; i < size; i++) ptr[i] = (ptr[i] * a + b) * gamma_data[i] + beta_data[i];
+    else
+        for (int i = 0; i < size; i++) ptr[i] = ptr[i] * a + b;
+
+    return 0;
+}
+#endif // NCNN_ZFH && __riscv_zvfh
 
 int LayerNorm_riscv::forward_inplace_fp16s(Mat& bottom_top_blob, const Option& opt) const
 {
@@ -291,10 +316,16 @@ int LayerNorm_riscv::forward_inplace_fp16s(Mat& bottom_top_blob, const Option& o
     if (dims == 1)
     {
         __fp16* ptr = bottom_top_blob;
-
+#if __riscv_zvfh
         return layernorm_rvv_pack1_fp16s_procedure(w * elempack, ptr, gamma_data, beta_data, eps, affine);
+#else
+        return layernorm_scaler_fp16s_procedure(w, ptr, gamma_data, beta_data, eps, affine);
+#endif
     }
+
+#if __riscv_zvfh
     if (elempack == 1)
+#endif  // __riscv_zvfh
     {
         if (dims == 2)
         {
@@ -305,7 +336,12 @@ int LayerNorm_riscv::forward_inplace_fp16s(Mat& bottom_top_blob, const Option& o
             for (int i = 0; i < h; i++)
             {
                 __fp16* ptr = bottom_top_blob.row<__fp16>(i);
+                
+#if __riscv_zvfh
                 layernorm_rvv_pack1_fp16s_procedure(w, ptr, gamma_data, beta_data, eps, affine);
+#else
+                layernorm_scaler_fp16s_procedure(w, ptr, gamma_data, beta_data, eps, affine);
+#endif
             }
         }
 
@@ -323,8 +359,12 @@ int LayerNorm_riscv::forward_inplace_fp16s(Mat& bottom_top_blob, const Option& o
                     for (int i = 0; i < h; i++)
                     {
                         __fp16* ptr = bottom_top_blob.channel(q).row<__fp16>(i);
-
+#if __riscv_zvfh
                         layernorm_rvv_pack1_fp16s_procedure(w, ptr, gamma_data, beta_data, eps, affine);
+#else
+                        layernorm_scaler_fp16s_procedure(w, ptr, gamma_data, beta_data, eps, affine);
+#endif
+                
                     }
                 }
             }
@@ -334,7 +374,11 @@ int LayerNorm_riscv::forward_inplace_fp16s(Mat& bottom_top_blob, const Option& o
                 for (int q = 0; q < channels; q++)
                 {
                     __fp16* ptr = bottom_top_blob.channel(q);
+#if __riscv_zvfh
                     layernorm_rvv_pack1_fp16s_procedure(size, ptr, gamma_data, beta_data, eps, affine);
+#else
+                    layernorm_scaler_fp16s_procedure(size, ptr, gamma_data, beta_data, eps, affine);
+#endif
                 }
             }
         }
@@ -374,7 +418,6 @@ int LayerNorm_riscv::forward_inplace_fp16s(Mat& bottom_top_blob, const Option& o
                     for (int i = 0; i < h; i++)
                     {
                         __fp16* ptr = bottom_top_blob.channel(q).row<__fp16>(i);
-
                         layernorm_rvv_packn_fp16s_procedure(w, ptr, gamma_data, beta_data, eps, affine, vl);
                     }
                 }
