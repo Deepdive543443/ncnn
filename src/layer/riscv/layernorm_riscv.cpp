@@ -28,6 +28,18 @@ LayerNorm_riscv::LayerNorm_riscv()
 }
 
 #if __riscv_vector
+#if __riscv_xtheadvector
+// FIXME inline causes illegal instruction :(
+__attribute__((noinline))
+#endif // __riscv_xtheadvector
+static vfloat32m8_t reset_tails(vfloat32m8_t x, size_t vl, float v)
+{
+    const size_t vlm8 = __riscv_vsetvlmax_e32m8();
+    vbool4_t _vl_mask = __riscv_vmsgeu_vx_u32m8_b4(__riscv_vid_v_u32m8(vlm8), vl, vlm8);
+    x = __riscv_vfmerge_vfm_f32m8(x, v, _vl_mask, vlm8);
+    return x;
+}
+
 static inline int layernorm_rvv_pack1_procedure(int size, float* ptr, const float* gamma_data, const float* beta_data, float eps, int affine)
 {
     float mean = 0.f;
@@ -53,7 +65,12 @@ static inline int layernorm_rvv_pack1_procedure(int size, float* ptr, const floa
         {
             size_t vlr = __riscv_vsetvl_e32m8(remain);
             vfloat32m8_t _p = __riscv_vle32_v_f32m8(ptr_sum, vlr);
+#if __riscv_xtheadvector
+            _p = reset_tails(_p, vlr, 0.f);
+            _sum = __riscv_vfadd_vv_f32m8(_sum, _p, vl_max);
+#else
             _sum = __riscv_vfadd_vv_f32m8_tu(_sum, _sum, _p, vlr);
+#endif // __riscv_xtheadvector
         }
 
         vfloat32m1_t _sum0 = __riscv_vfmv_v_f_f32m1(0.f, __riscv_vsetvlmax_e32m1());
@@ -84,7 +101,13 @@ static inline int layernorm_rvv_pack1_procedure(int size, float* ptr, const floa
             vfloat32m8_t _p = __riscv_vle32_v_f32m8(ptr_sum, vlr);
             vfloat32m8_t _temp = __riscv_vfsub_vf_f32m8(_p, mean, vlr);
             _temp = __riscv_vfmul_vv_f32m8(_temp, _temp, vlr);
+
+#if __riscv_xtheadvector
+            _temp = reset_tails(_temp, vlr, 0.f);
+            _sqsum = __riscv_vfadd_vv_f32m8(_sqsum, _temp, vl_max);
+#else
             _sqsum = __riscv_vfadd_vv_f32m8_tu(_sqsum, _sqsum, _temp, vlr);
+#endif // __riscv_xtheadvector
         }
 
         vfloat32m1_t _sqsum0 = __riscv_vfmv_v_f_f32m1(0.f, __riscv_vsetvlmax_e32m1());

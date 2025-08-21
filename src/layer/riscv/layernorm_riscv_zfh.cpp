@@ -12,6 +12,18 @@ namespace ncnn {
 
 #if NCNN_ZFH
 #if __riscv_vector
+#if __riscv_xtheadvector
+// FIXME inline causes illegal instruction :(
+__attribute__((noinline))
+#endif // __riscv_xtheadvector
+static vfloat32m8_t reset_tails(vfloat32m8_t x, size_t vl, float v)
+{
+    const size_t vlm8 = __riscv_vsetvlmax_e32m8();
+    vbool4_t _vl_mask = __riscv_vmsgeu_vx_u32m8_b4(__riscv_vid_v_u32m8(vlm8), vl, vlm8);
+    x = __riscv_vfmerge_vfm_f32m8(x, v, _vl_mask, vlm8);
+    return x;
+}
+
 static inline int layernorm_rvv_pack1_fp16s_procedure(int size, __fp16* ptr, const float* gamma_data, const float* beta_data, float eps, int affine)
 {
     float mean = 0.f;
@@ -37,7 +49,12 @@ static inline int layernorm_rvv_pack1_fp16s_procedure(int size, __fp16* ptr, con
         {
             size_t vlr = __riscv_vsetvl_e16m4(remain);
             vfloat32m8_t _p = __riscv_vfwcvt_f_f_v_f32m8(__riscv_vle16_v_f16m4(ptr_sum, vlr), __riscv_vsetvl_e32m8(remain));
+#if __riscv_xtheadvector
+            _p = reset_tails(_p, __riscv_vsetvl_e32m8(remain), 0.f);
+            _sum = __riscv_vfadd_vv_f32m8(_sum, _p, __riscv_vsetvlmax_e32m8());
+#else
             _sum = __riscv_vfadd_vv_f32m8_tu(_sum, _sum, _p, __riscv_vsetvl_e32m8(remain));
+#endif
         }
 
         vfloat32m1_t _sum0 = __riscv_vfmv_v_f_f32m1(0.f, __riscv_vsetvlmax_e32m1());
@@ -68,7 +85,12 @@ static inline int layernorm_rvv_pack1_fp16s_procedure(int size, __fp16* ptr, con
             vfloat32m8_t _p = __riscv_vfwcvt_f_f_v_f32m8(__riscv_vle16_v_f16m4(ptr_sum, vlr),  __riscv_vsetvl_e32m8(remain));
             vfloat32m8_t _temp = __riscv_vfsub_vf_f32m8(_p, mean,  __riscv_vsetvl_e32m8(remain));
             _temp = __riscv_vfmul_vv_f32m8(_temp, _temp,  __riscv_vsetvl_e32m8(remain));
+#if __riscv_xtheadvector
+            _temp = reset_tails(_temp, __riscv_vsetvl_e32m8(remain), 0.f);
+            _sqsum = __riscv_vfadd_vv_f32m8(_sqsum, _temp, __riscv_vsetvlmax_e32m8());
+#else
             _sqsum = __riscv_vfadd_vv_f32m8_tu(_sqsum, _sqsum, _temp,  __riscv_vsetvl_e32m8(remain));
+#endif // __riscv_xtheadvector
         }
 
         vfloat32m1_t _sqsum0 = __riscv_vfmv_v_f_f32m1(0.f, __riscv_vsetvlmax_e32m1());
@@ -195,6 +217,18 @@ static inline int layernorm_scaler_fp16s_procedure(int size, __fp16* ptr, const 
 #endif // __riscv_vector
 
 #if __riscv_zvfh
+#if __riscv_xtheadvector
+// FIXME inline causes illegal instruction :(
+__attribute__((noinline))
+#endif // __riscv_xtheadvector
+static vfloat16m8_t reset_tails(vfloat16m8_t x, size_t vl, __fp16 v)
+{
+    const size_t vlm8 = __riscv_vsetvlmax_e16m8();
+    vbool2_t _vl_mask = __riscv_vmsgeu_vx_u16m8_b2(__riscv_vid_v_u16m8(vlm8), vl, vlm8);
+    x = __riscv_vfmerge_vfm_f16m8(x, v, _vl_mask, vlm8);
+    return x;
+}
+
 static inline int layernorm_rvv_pack1_fp16sa_procedure(int size, __fp16* ptr, const float* gamma_data, const float* beta_data, float eps, int affine)
 {
     __fp16 mean = 0.f;
@@ -220,7 +254,12 @@ static inline int layernorm_rvv_pack1_fp16sa_procedure(int size, __fp16* ptr, co
         {
             size_t vlr = __riscv_vsetvl_e16m8(remain);
             vfloat16m8_t _p = __riscv_vle16_v_f16m8(ptr_sum, vlr);
+#if __riscv_xtheadvector
+            _p = reset_tails(_p, __riscv_vsetvl_e16m8(remain), (__fp16)0.f);
+            _sum = __riscv_vfadd_vv_f16m8(_sum, _p, __riscv_vsetvlmax_e16m8());
+#else
             _sum = __riscv_vfadd_vv_f16m8_tu(_sum, _sum, _p, vlr);
+#endif // __riscv_xtheadvector
         }
 
         vfloat16m1_t _sum0 = __riscv_vfmv_v_f_f16m1(0.f, __riscv_vsetvlmax_e16m1());
@@ -251,7 +290,12 @@ static inline int layernorm_rvv_pack1_fp16sa_procedure(int size, __fp16* ptr, co
             vfloat16m8_t _p = __riscv_vle16_v_f16m8(ptr_sum, vlr);
             vfloat16m8_t _temp = __riscv_vfsub_vf_f16m8(_p, mean, vlr);
             _temp = __riscv_vfmul_vv_f16m8(_temp, _temp, vlr);
+#if __riscv_xtheadvector
+            _temp = reset_tails(_temp, __riscv_vsetvl_e16m8(remain), (__fp16)0.f);
+            _sqsum = __riscv_vfadd_vv_f16m8(_sqsum, _temp, __riscv_vsetvlmax_e16m8());
+#else
             _sqsum = __riscv_vfadd_vv_f16m8_tu(_sqsum, _sqsum, _temp, vlr);
+#endif // __riscv_xtheadvector
         }
 
         vfloat16m1_t _sqsum0 = __riscv_vfmv_v_f_f16m1(0.f, __riscv_vsetvlmax_e16m1());
