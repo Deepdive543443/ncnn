@@ -14,40 +14,68 @@ namespace ncnn {
 #if __riscv_vector
 static inline int layernorm_rvv_pack1_fp16s_procedure(int size, __fp16* ptr, const float* gamma_data, const float* beta_data, float eps, int affine)
 {
-    float sum = 0.f;
-    float sqsum = 0.f;
-    vfloat32m1_t _sum = __riscv_vfmv_s_f_f32m1(0.f, __riscv_vsetvlmax_e32m1());
-    vfloat32m1_t _sqsum = __riscv_vfmv_s_f_f32m1(0.f, __riscv_vsetvlmax_e32m1());
-    {
-        int n = size;
-        __fp16* ptr_sum = ptr;
-        while (n > 0)
-        {
-            size_t vl = __riscv_vsetvl_e16m4(n);
-            vfloat32m8_t _p = __riscv_vfwcvt_f_f_v_f32m8(__riscv_vle16_v_f16m4(ptr_sum, vl), vl);
-            _sum = __riscv_vfredusum_vs_f32m8_f32m1(_p, /* scalar */ _sum, vl);
-            ptr_sum += vl;
-            n -= vl;
-        }
-    }
-    sum = __riscv_vfmv_f_s_f32m1_f32(_sum);
-    float mean = sum / size;
+    float mean = 0.f;
+    float var = 0.f;
+    size_t vl_max = __riscv_vsetvlmax_e16m4();
 
     {
-        int n = size;
-        __fp16* ptr_sqsum = ptr;
+        vfloat32m8_t _sum = __riscv_vfmv_v_f_f32m8(0.f, __riscv_vsetvlmax_e32m8());
+        int n = size / vl_max * vl_max;
+        __fp16* ptr_sum = ptr;
+
         while (n > 0)
         {
-            size_t vl = __riscv_vsetvl_e16m4(n);
-            vfloat32m8_t _p = __riscv_vfwcvt_f_f_v_f32m8(__riscv_vle16_v_f16m4(ptr_sqsum, vl), vl);
-            _p = __riscv_vfsub_vf_f32m8(_p, mean, vl);
-            _sqsum = __riscv_vfredusum_vs_f32m8_f32m1(__riscv_vfmul_vv_f32m8(_p, _p, vl), /* scalar */ _sqsum, vl);
-            n -= vl;
-            ptr_sqsum += vl;
+            vfloat32m8_t _p = __riscv_vfwcvt_f_f_v_f32m8(__riscv_vle16_v_f16m4(ptr_sum, vl_max), __riscv_vsetvlmax_e32m8());
+            _sum = __riscv_vfadd_vv_f32m8(_sum, _p, __riscv_vsetvlmax_e32m8());
+
+            ptr_sum += vl_max;
+            n -= vl_max;
         }
+
+        int remain = size % vl_max;
+        if (remain > 0)
+        {
+            size_t vlr = __riscv_vsetvl_e16m4(remain);
+            vfloat32m8_t _p = __riscv_vfwcvt_f_f_v_f32m8(__riscv_vle16_v_f16m4(ptr_sum, vlr), __riscv_vsetvl_e32m8(remain));
+            _sum = __riscv_vfadd_vv_f32m8_tu(_sum, _sum, _p, __riscv_vsetvl_e32m8(remain));
+        }
+
+        vfloat32m1_t _sum0 = __riscv_vfmv_v_f_f32m1(0.f, __riscv_vsetvlmax_e32m1());
+        _sum0 = __riscv_vfredusum_vs_f32m8_f32m1(_sum, _sum0, __riscv_vsetvlmax_e32m8());  
+        mean = __riscv_vfmv_f_s_f32m1_f32(_sum0) / size;
     }
-    sqsum = __riscv_vfmv_f_s_f32m1_f32(_sqsum);
-    float var = sqsum / size;
+
+    {
+        vfloat32m8_t _sqsum = __riscv_vfmv_v_f_f32m8(0.f, __riscv_vsetvlmax_e32m8());
+        int n = size / vl_max * vl_max;
+        __fp16* ptr_sum = ptr;
+
+        while (n > 0)
+        {
+            vfloat32m8_t _p = __riscv_vfwcvt_f_f_v_f32m8(__riscv_vle16_v_f16m4(ptr_sum, vl_max), __riscv_vsetvlmax_e32m8());
+            vfloat32m8_t _temp = __riscv_vfsub_vf_f32m8(_p, mean, __riscv_vsetvlmax_e32m8());
+            _temp = __riscv_vfmul_vv_f32m8(_temp, _temp, __riscv_vsetvlmax_e32m8());
+            _sqsum = __riscv_vfadd_vv_f32m8(_sqsum, _temp, __riscv_vsetvlmax_e32m8());
+
+            ptr_sum += vl_max;
+            n -= vl_max;
+        }
+
+        int remain = size % vl_max;
+        if (remain > 0)
+        {
+            size_t vlr = __riscv_vsetvl_e16m4(remain);
+            vfloat32m8_t _p = __riscv_vfwcvt_f_f_v_f32m8(__riscv_vle16_v_f16m4(ptr_sum, vlr),  __riscv_vsetvl_e32m8(remain));
+            vfloat32m8_t _temp = __riscv_vfsub_vf_f32m8(_p, mean,  __riscv_vsetvl_e32m8(remain));
+            _temp = __riscv_vfmul_vv_f32m8(_temp, _temp,  __riscv_vsetvl_e32m8(remain));
+            _sqsum = __riscv_vfadd_vv_f32m8_tu(_sqsum, _sqsum, _temp,  __riscv_vsetvl_e32m8(remain));
+        }
+
+        vfloat32m1_t _sqsum0 = __riscv_vfmv_v_f_f32m1(0.f, __riscv_vsetvlmax_e32m1());
+        _sqsum0 = __riscv_vfredusum_vs_f32m8_f32m1(_sqsum, _sqsum0, __riscv_vsetvlmax_e32m8());
+        var = __riscv_vfmv_f_s_f32m1_f32(_sqsum0) / size;
+    }
+
     float a = static_cast<float>(1.f / (sqrt(var + eps)));
     float b = -mean * a;
 
@@ -169,41 +197,68 @@ static inline int layernorm_scaler_fp16s_procedure(int size, __fp16* ptr, const 
 #if __riscv_zvfh
 static inline int layernorm_rvv_pack1_fp16sa_procedure(int size, __fp16* ptr, const float* gamma_data, const float* beta_data, float eps, int affine)
 {
-    __fp16 sum = 0.f;
-    __fp16 sqsum = 0.f;
-    vfloat16m1_t _sum = __riscv_vfmv_s_f_f16m1(0.f, __riscv_vsetvlmax_e16m1());
-    vfloat16m1_t _sqsum = __riscv_vfmv_s_f_f16m1(0.f, __riscv_vsetvlmax_e16m1());
+    __fp16 mean = 0.f;
+    __fp16 var = 0.f;
+    size_t vl_max = __riscv_vsetvlmax_e16m8();
+
     {
-        int n = size;
+        vfloat16m8_t _sum = __riscv_vfmv_v_f_f16m8(0.f, vl_max);
+        int n = size / vl_max * vl_max;
         __fp16* ptr_sum = ptr;
+
         while (n > 0)
         {
-            size_t vl = __riscv_vsetvl_e16m8(n);
-            vfloat16m8_t _p = __riscv_vle16_v_f16m8(ptr_sum, vl);
-            _sum = __riscv_vfredusum_vs_f16m8_f16m1(_p, /* scalar */ _sum, vl);
-            ptr_sum += vl;
-            n -= vl;
-        }
-    }
-    sum = __riscv_vfmv_f_s_f16m1_f16(_sum);
+            vfloat16m8_t _p = __riscv_vle16_v_f16m8(ptr_sum, vl_max);
+            _sum = __riscv_vfadd_vv_f16m8(_sum, _p, vl_max);
 
-    __fp16 mean = sum / size;
+            ptr_sum += vl_max;
+            n -= vl_max;
+        }
+
+        int remain = size % vl_max;
+        if (remain > 0)
+        {
+            size_t vlr = __riscv_vsetvl_e16m8(remain);
+            vfloat16m8_t _p = __riscv_vle16_v_f16m8(ptr_sum, vlr);
+            _sum = __riscv_vfadd_vv_f16m8_tu(_sum, _sum, _p, vlr);
+        }
+
+        vfloat16m1_t _sum0 = __riscv_vfmv_v_f_f16m1(0.f, __riscv_vsetvlmax_e16m1());
+        _sum0 = __riscv_vfredusum_vs_f16m8_f16m1(_sum, _sum0, vl_max);  
+        mean = __riscv_vfmv_f_s_f16m1_f16(_sum0) / size;
+    }
+
     {
-        int n = size;
-        __fp16* ptr_sqsum = ptr;
+        vfloat16m8_t _sqsum = __riscv_vfmv_v_f_f16m8(0.f, vl_max);
+        int n = size / vl_max * vl_max;
+        __fp16* ptr_sum = ptr;
+
         while (n > 0)
         {
-            size_t vl = __riscv_vsetvl_e16m8(n);
-            vfloat16m8_t _p = __riscv_vle16_v_f16m8(ptr_sqsum, vl);
-            _p = __riscv_vfsub_vf_f16m8(_p, mean, vl);
-            _sqsum = __riscv_vfredusum_vs_f16m8_f16m1(__riscv_vfmul_vv_f16m8(_p, _p, vl), /* scalar */ _sqsum, vl);
-            n -= vl;
-            ptr_sqsum += vl;
-        }
-    }
-    sqsum = __riscv_vfmv_f_s_f16m1_f16(_sqsum);
+            vfloat16m8_t _p = __riscv_vle16_v_f16m8(ptr_sum, vl_max);
+            vfloat16m8_t _temp = __riscv_vfsub_vf_f16m8(_p, mean, vl_max);
+            _temp = __riscv_vfmul_vv_f16m8(_temp, _temp, vl_max);
+            _sqsum = __riscv_vfadd_vv_f16m8(_sqsum, _temp, vl_max);
 
-    __fp16 var = sqsum / size;
+            ptr_sum += vl_max;
+            n -= vl_max;
+        }
+
+        int remain = size % vl_max;
+        if (remain > 0)
+        {
+            size_t vlr = __riscv_vsetvl_e16m8(remain);
+            vfloat16m8_t _p = __riscv_vle16_v_f16m8(ptr_sum, vlr);
+            vfloat16m8_t _temp = __riscv_vfsub_vf_f16m8(_p, mean, vlr);
+            _temp = __riscv_vfmul_vv_f16m8(_temp, _temp, vlr);
+            _sqsum = __riscv_vfadd_vv_f16m8_tu(_sqsum, _sqsum, _temp, vlr);
+        }
+
+        vfloat16m1_t _sqsum0 = __riscv_vfmv_v_f_f16m1(0.f, __riscv_vsetvlmax_e16m1());
+        _sqsum0 = __riscv_vfredusum_vs_f16m8_f16m1(_sqsum, _sqsum0, vl_max);
+        var = __riscv_vfmv_f_s_f16m1_f16(_sqsum0) / size;
+    }
+
     __fp16 a = static_cast<__fp16>(1.f / (sqrt(var + eps)));
     __fp16 b = static_cast<__fp16>(-mean * a);
 
