@@ -32,7 +32,8 @@ LayerNorm_riscv::LayerNorm_riscv()
 // FIXME inline causes illegal instruction :(
 __attribute__((noinline))
 #endif // __riscv_xtheadvector
-static vfloat32m8_t reset_tails(vfloat32m8_t x, size_t vl, float v)
+static vfloat32m8_t
+reset_tails(vfloat32m8_t x, size_t vl, float v)
 {
     const size_t vlm8 = __riscv_vsetvlmax_e32m8();
     vbool4_t _vl_mask = __riscv_vmsgeu_vx_u32m8_b4(__riscv_vid_v_u32m8(vlm8), vl, vlm8);
@@ -74,7 +75,7 @@ static inline int layernorm_rvv_pack1_procedure(int size, float* ptr, const floa
         }
 
         vfloat32m1_t _sum0 = __riscv_vfmv_v_f_f32m1(0.f, __riscv_vsetvlmax_e32m1());
-        _sum0 = __riscv_vfredusum_vs_f32m8_f32m1(_sum, _sum0, vl_max);  
+        _sum0 = __riscv_vfredusum_vs_f32m8_f32m1(_sum, _sum0, vl_max);
         mean = __riscv_vfmv_f_s_f32m1_f32(_sum0) / size;
     }
 
