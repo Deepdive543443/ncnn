@@ -24,125 +24,142 @@ reset_tails(vfloat32m8_t x, size_t vl, float v)
     x = __riscv_vfmerge_vfm_f32m8(x, v, _vl_mask, vlm8);
     return x;
 }
+#endif // __riscv_vector
 
-static inline int layernorm_rvv_pack1_fp16s_procedure(int size, __fp16* ptr, const float* gamma_data, const float* beta_data, float eps, int affine)
+static int layernorm_fp16s(__fp16* ptr, const float* gamma_data, const float* beta_data, float eps, int elementcount, int elementpack)
 {
     float mean = 0.f;
     float var = 0.f;
+
+    size_t size = elementcount * elementpack;
+    int remain = elementcount;
+#if __riscv_vector
     size_t vl_max = __riscv_vsetvlmax_e16m4();
-
-    {
-        vfloat32m8_t _sum = __riscv_vfmv_v_f_f32m8(0.f, __riscv_vsetvlmax_e32m8());
-        int n = size / vl_max * vl_max;
-        __fp16* ptr_sum = ptr;
-
-        while (n > 0)
-        {
-            vfloat32m8_t _p = __riscv_vfwcvt_f_f_v_f32m8(__riscv_vle16_v_f16m4(ptr_sum, vl_max), __riscv_vsetvlmax_e32m8());
-            _sum = __riscv_vfadd_vv_f32m8(_sum, _p, __riscv_vsetvlmax_e32m8());
-
-            ptr_sum += vl_max;
-            n -= vl_max;
-        }
-
-        int remain = size % vl_max;
-        if (remain > 0)
-        {
-            size_t vlr = __riscv_vsetvl_e16m4(remain);
-            vfloat32m8_t _p = __riscv_vfwcvt_f_f_v_f32m8(__riscv_vle16_v_f16m4(ptr_sum, vlr), __riscv_vsetvl_e32m8(remain));
-#if __riscv_xtheadvector
-            _p = reset_tails(_p, __riscv_vsetvl_e32m8(remain), 0.f);
-            _sum = __riscv_vfadd_vv_f32m8(_sum, _p, __riscv_vsetvlmax_e32m8());
-#else
-            _sum = __riscv_vfadd_vv_f32m8_tu(_sum, _sum, _p, __riscv_vsetvl_e32m8(remain));
+    size_t vl_f32 = __riscv_vsetvlmax_e32m8();
+    remain = elementcount % vl_max;
 #endif
-        }
 
-        vfloat32m1_t _sum0 = __riscv_vfmv_v_f_f32m1(0.f, __riscv_vsetvlmax_e32m1());
-        _sum0 = __riscv_vfredusum_vs_f32m8_f32m1(_sum, _sum0, __riscv_vsetvlmax_e32m8());
-        mean = __riscv_vfmv_f_s_f32m1_f32(_sum0) / size;
-    }
-
+    int i = 0;
+    __fp16* ptr_sum = ptr;
+#if __riscv_vector
+    vfloat32m8_t _sum = __riscv_vfmv_v_f_f32m8(0.f, vl_max);
+    for (; i + vl_max - 1 < size; i += vl_max)
     {
-        vfloat32m8_t _sqsum = __riscv_vfmv_v_f_f32m8(0.f, __riscv_vsetvlmax_e32m8());
-        int n = size / vl_max * vl_max;
-        __fp16* ptr_sum = ptr;
-
-        while (n > 0)
-        {
-            vfloat32m8_t _p = __riscv_vfwcvt_f_f_v_f32m8(__riscv_vle16_v_f16m4(ptr_sum, vl_max), __riscv_vsetvlmax_e32m8());
-            vfloat32m8_t _temp = __riscv_vfsub_vf_f32m8(_p, mean, __riscv_vsetvlmax_e32m8());
-            _temp = __riscv_vfmul_vv_f32m8(_temp, _temp, __riscv_vsetvlmax_e32m8());
-            _sqsum = __riscv_vfadd_vv_f32m8(_sqsum, _temp, __riscv_vsetvlmax_e32m8());
-
-            ptr_sum += vl_max;
-            n -= vl_max;
-        }
-
-        int remain = size % vl_max;
-        if (remain > 0)
-        {
-            size_t vlr = __riscv_vsetvl_e16m4(remain);
-            vfloat32m8_t _p = __riscv_vfwcvt_f_f_v_f32m8(__riscv_vle16_v_f16m4(ptr_sum, vlr), __riscv_vsetvl_e32m8(remain));
-            vfloat32m8_t _temp = __riscv_vfsub_vf_f32m8(_p, mean, __riscv_vsetvl_e32m8(remain));
-            _temp = __riscv_vfmul_vv_f32m8(_temp, _temp, __riscv_vsetvl_e32m8(remain));
-#if __riscv_xtheadvector
-            _temp = reset_tails(_temp, __riscv_vsetvl_e32m8(remain), 0.f);
-            _sqsum = __riscv_vfadd_vv_f32m8(_sqsum, _temp, __riscv_vsetvlmax_e32m8());
-#else
-            _sqsum = __riscv_vfadd_vv_f32m8_tu(_sqsum, _sqsum, _temp, __riscv_vsetvl_e32m8(remain));
-#endif // __riscv_xtheadvector
-        }
-
-        vfloat32m1_t _sqsum0 = __riscv_vfmv_v_f_f32m1(0.f, __riscv_vsetvlmax_e32m1());
-        _sqsum0 = __riscv_vfredusum_vs_f32m8_f32m1(_sqsum, _sqsum0, __riscv_vsetvlmax_e32m8());
-        var = __riscv_vfmv_f_s_f32m1_f32(_sqsum0) / size;
+        vfloat32m8_t _p = __riscv_vfwcvt_f_f_v_f32m8(__riscv_vle16_v_f16m4(ptr_sum, vl_max), vl_f32);
+        _sum = __riscv_vfadd_vv_f32m8(_sum, _p, vl_f32);
+        ptr_sum += vl_max;
     }
 
+    if (i < size)
+    {
+        size_t vlr = __riscv_vsetvl_e16m4(remain);
+        vfloat32m8_t _p = __riscv_vfwcvt_f_f_v_f32m8(__riscv_vle16_v_f16m4(ptr_sum, vlr), __riscv_vsetvl_e32m8(remain));
+#if __riscv_xtheadvector
+        _p = reset_tails(_p, __riscv_vsetvl_e32m8(remain), 0.f);
+        _sum = __riscv_vfadd_vv_f32m8(_sum, _p, vl_f32);
+#else
+        _sum = __riscv_vfadd_vv_f32m8_tu(_sum, _sum, _p, __riscv_vsetvl_e32m8(remain));
+#endif
+        i += remain;
+    }
+
+    vfloat32m1_t _sum0 = __riscv_vfmv_v_f_f32m1(0.f, __riscv_vsetvlmax_e32m1());
+    _sum0 = __riscv_vfredusum_vs_f32m8_f32m1(_sum, _sum0, vl_f32);
+    mean = __riscv_vfmv_f_s_f32m1_f32(_sum0);
+#endif // __riscv_vector
+    for (; i < size; i++) mean += (float)*ptr_sum++;
+    mean /= elementcount;
+
+    i = 0;
+    ptr_sum = ptr;
+#if __riscv_vector
+    vfloat32m8_t _sqsum = __riscv_vfmv_v_f_f32m8(0.f, vl_f32);
+    for (; i + vl_max - 1 < size; i += vl_max)
+    {
+        vfloat32m8_t _p = __riscv_vfwcvt_f_f_v_f32m8(__riscv_vle16_v_f16m4(ptr_sum, vl_max), vl_f32);
+        vfloat32m8_t _temp = __riscv_vfsub_vf_f32m8(_p, mean, vl_f32);
+        _temp = __riscv_vfmul_vv_f32m8(_temp, _temp, vl_f32);
+        _sqsum = __riscv_vfadd_vv_f32m8(_sqsum, _temp, vl_f32);
+
+        ptr_sum += vl_max;
+    }
+
+    if (i < size)
+    {
+        size_t vlr = __riscv_vsetvl_e16m4(remain);
+        vfloat32m8_t _p = __riscv_vfwcvt_f_f_v_f32m8(__riscv_vle16_v_f16m4(ptr_sum, vlr), __riscv_vsetvl_e32m8(remain));
+        vfloat32m8_t _temp = __riscv_vfsub_vf_f32m8(_p, mean, __riscv_vsetvl_e32m8(remain));
+        _temp = __riscv_vfmul_vv_f32m8(_temp, _temp, __riscv_vsetvl_e32m8(remain));
+#if __riscv_xtheadvector
+        _temp = reset_tails(_temp, __riscv_vsetvl_e32m8(remain), 0.f);
+        _sqsum = __riscv_vfadd_vv_f32m8(_sqsum, _temp, vl_f32);
+#else
+        _sqsum = __riscv_vfadd_vv_f32m8_tu(_sqsum, _sqsum, _temp, __riscv_vsetvl_e32m8(remain));
+#endif // __riscv_xtheadvector
+        i += remain;
+    }
+
+    vfloat32m1_t _sqsum0 = __riscv_vfmv_v_f_f32m1(0.f, __riscv_vsetvlmax_e32m1());
+    _sqsum0 = __riscv_vfredusum_vs_f32m8_f32m1(_sqsum, _sqsum0, vl_f32);
+    var = __riscv_vfmv_f_s_f32m1_f32(_sqsum0);
+#endif // __riscv_vector
+    for (; i < size; i++)
+    {
+        float tmp = (float)*ptr_sum++ - mean;
+        var += tmp * tmp;
+    }
+
+    var /= elementcount;
     float a = static_cast<float>(1.f / (sqrt(var + eps)));
     float b = -mean * a;
 
+    int n = size;
+    __fp16* ptr_store = ptr;
+    if (gamma_data && beta_data)
     {
-        int n = size;
-        __fp16* ptr_store = ptr;
         const float* ptr_gamma = gamma_data;
         const float* ptr_beta = beta_data;
-        if (affine)
+#if __riscv_vector
+        while (n > 0)
         {
-            while (n > 0)
-            {
-                size_t vl = __riscv_vsetvl_e16m4(n);
-                vfloat32m8_t _p = __riscv_vfwcvt_f_f_v_f32m8(__riscv_vle16_v_f16m4(ptr_store, vl), vl);
-                _p = __riscv_vfmul_vf_f32m8(_p, a, vl);
-                vfloat32m8_t _gamma = __riscv_vle32_v_f32m8(ptr_gamma, vl);
-                _p = __riscv_vfadd_vf_f32m8(_p, b, vl);
-                vfloat32m8_t _beta = __riscv_vle32_v_f32m8(ptr_beta, vl);
-                _p = __riscv_vfmadd_vv_f32m8(_p, _gamma, _beta, vl);
-                __riscv_vse16_v_f16m4(ptr_store, __riscv_vfncvt_f_f_w_f16m4(_p, vl), vl);
+            size_t vl = __riscv_vsetvl_e16m4(n);
+            vfloat32m8_t _p = __riscv_vfwcvt_f_f_v_f32m8(__riscv_vle16_v_f16m4(ptr_store, vl), vl);
+            _p = __riscv_vfmul_vf_f32m8(_p, a, vl);
+            vfloat32m8_t _gamma = __riscv_vle32_v_f32m8(ptr_gamma, vl);
+            _p = __riscv_vfadd_vf_f32m8(_p, b, vl);
+            vfloat32m8_t _beta = __riscv_vle32_v_f32m8(ptr_beta, vl);
+            _p = __riscv_vfmadd_vv_f32m8(_p, _gamma, _beta, vl);
+            __riscv_vse16_v_f16m4(ptr_store, __riscv_vfncvt_f_f_w_f16m4(_p, vl), vl);
 
-                n -= vl;
-                ptr_store += vl;
-                ptr_gamma += vl;
-                ptr_beta += vl;
-            }
+            n -= vl;
+            ptr_store += vl;
+            ptr_gamma += vl;
+            ptr_beta += vl;
         }
-        else
+
+#endif // __riscv_vector
+        while (n-- > 0) *ptr_store++ = (__fp16)((float)*ptr_store * a + b) * *ptr_gamma++ + *ptr_beta++;
+    }
+    else
+    {
+#if __riscv_vector
+        while (n > 0)
         {
-            while (n > 0)
-            {
-                size_t vl = __riscv_vsetvl_e16m4(n);
-                vfloat32m8_t _p = __riscv_vfwcvt_f_f_v_f32m8(__riscv_vle16_v_f16m4(ptr_store, vl), vl);
-                _p = __riscv_vfmul_vf_f32m8(_p, a, vl);
-                _p = __riscv_vfadd_vf_f32m8(_p, b, vl);
-                __riscv_vse16_v_f16m4(ptr_store, __riscv_vfncvt_f_f_w_f16m4(_p, vl), vl);
-                n -= vl;
-                ptr_store += vl;
-            }
+            size_t vl = __riscv_vsetvl_e16m4(n);
+            vfloat32m8_t _p = __riscv_vfwcvt_f_f_v_f32m8(__riscv_vle16_v_f16m4(ptr_store, vl), vl);
+            _p = __riscv_vfmul_vf_f32m8(_p, a, vl);
+            _p = __riscv_vfadd_vf_f32m8(_p, b, vl);
+            __riscv_vse16_v_f16m4(ptr_store, __riscv_vfncvt_f_f_w_f16m4(_p, vl), vl);
+            n -= vl;
+            ptr_store += vl;
         }
+#endif // __riscv_vector
+        while (n-- > 0) *ptr_store++ = (__fp16)((float)*ptr_store * a + b);
     }
     return 0;
 }
 
+#if __riscv_vector
 static inline int layernorm_rvv_packn_fp16s_procedure(int size, __fp16* ptr, const float* gamma_data, const float* beta_data, float eps, int affine, const size_t vl)
 {
     // f16m1 => f32m2
@@ -188,34 +205,7 @@ static inline int layernorm_rvv_packn_fp16s_procedure(int size, __fp16* ptr, con
 
     return 0;
 }
-#else
-static inline int layernorm_scaler_fp16s_procedure(int size, __fp16* ptr, const float* gamma_data, const float* beta_data, float eps, int affine)
-{
-    float sum = 0.f;
-    float sqsum = 0.f;
-    for (int i = 0; i < size; i++) sum += (float)ptr[i];
-
-    float mean = sum / size;
-    float tmp = 0.f;
-    for (int i = 0; i < size; i++)
-    {
-        tmp = (float)ptr[i] - mean;
-        sqsum += tmp * tmp;
-    }
-
-    float var = sqsum / size;
-
-    float a = 1.f / (sqrt(var + eps));
-    float b = -mean * a;
-
-    if (affine)
-        for (int i = 0; i < size; i++) ptr[i] = (__fp16)(((float)ptr[i] * a + b) * gamma_data[i] + beta_data[i]);
-    else
-        for (int i = 0; i < size; i++) ptr[i] = (__fp16)((float)ptr[i] * a + b);
-
-    return 0;
-}
-#endif // __riscv_vector
+#endif
 
 #if __riscv_zvfh
 #if __riscv_xtheadvector
@@ -419,15 +409,13 @@ int LayerNorm_riscv::forward_inplace_fp16s(Mat& bottom_top_blob, const Option& o
     int elempack = bottom_top_blob.elempack;
     int dims = bottom_top_blob.dims;
     int w = bottom_top_blob.w;
+    int h = bottom_top_blob.h;
+    int channels = bottom_top_blob.c;
 
     if (dims == 1)
     {
         __fp16* ptr = bottom_top_blob;
-#if __riscv_vector
-        return layernorm_rvv_pack1_fp16s_procedure(w * elempack, ptr, gamma_data, beta_data, eps, affine);
-#else
-        return layernorm_scaler_fp16s_procedure(w, ptr, gamma_data, beta_data, eps, affine);
-#endif // __riscv_vector
+        return layernorm_fp16s(ptr, gamma_data, beta_data, eps, w * elempack, 1);
     }
 
 #if __riscv_vector
@@ -443,12 +431,7 @@ int LayerNorm_riscv::forward_inplace_fp16s(Mat& bottom_top_blob, const Option& o
             for (int i = 0; i < h; i++)
             {
                 __fp16* ptr = bottom_top_blob.row<__fp16>(i);
-
-#if __riscv_vector
-                layernorm_rvv_pack1_fp16s_procedure(w, ptr, gamma_data, beta_data, eps, affine);
-#else
-                layernorm_scaler_fp16s_procedure(w, ptr, gamma_data, beta_data, eps, affine);
-#endif // __riscv_vector
+                layernorm_fp16s(ptr, gamma_data, beta_data, eps, w, elempack);
             }
         }
 
@@ -466,11 +449,7 @@ int LayerNorm_riscv::forward_inplace_fp16s(Mat& bottom_top_blob, const Option& o
                     for (int i = 0; i < h; i++)
                     {
                         __fp16* ptr = bottom_top_blob.channel(q).row<__fp16>(i);
-#if __riscv_vector
-                        layernorm_rvv_pack1_fp16s_procedure(w, ptr, gamma_data, beta_data, eps, affine);
-#else
-                        layernorm_scaler_fp16s_procedure(w, ptr, gamma_data, beta_data, eps, affine);
-#endif // __riscv_vector
+                        layernorm_fp16s(ptr, gamma_data, beta_data, eps, w, elempack);
                     }
                 }
             }
@@ -480,11 +459,7 @@ int LayerNorm_riscv::forward_inplace_fp16s(Mat& bottom_top_blob, const Option& o
                 for (int q = 0; q < channels; q++)
                 {
                     __fp16* ptr = bottom_top_blob.channel(q);
-#if __riscv_vector
-                    layernorm_rvv_pack1_fp16s_procedure(size, ptr, gamma_data, beta_data, eps, affine);
-#else
-                    layernorm_scaler_fp16s_procedure(size, ptr, gamma_data, beta_data, eps, affine);
-#endif // __riscv_vector
+                    layernorm_fp16s(ptr, gamma_data, beta_data, eps, w * h, elempack);
                 }
             }
         }
