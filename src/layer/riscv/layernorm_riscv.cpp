@@ -187,7 +187,7 @@ static int layernorm(float* ptr, const float* gamma_data, const float* beta_data
                 ptr_store += vl;
                 ptr_gamma += vl;
                 ptr_beta += vl;
-            }            
+            }
         }
 
 #endif // __riscv_vector
@@ -291,7 +291,7 @@ int LayerNorm_riscv::forward_inplace(Mat& bottom_top_blob, const Option& opt) co
     int h = bottom_top_blob.h;
     int channels = bottom_top_blob.c;
 
-    NCNN_LOGE("elempack = %d  dims = %d w = %d h = %d channels = %d", elempack, dims, w, h,channels);
+    NCNN_LOGE("elempack = %d  dims = %d w = %d h = %d channels = %d", elempack, dims, w, h, channels);
 
     if (dims == 1)
     {
@@ -301,7 +301,7 @@ int LayerNorm_riscv::forward_inplace(Mat& bottom_top_blob, const Option& opt) co
 #if __riscv_vector
     const int packn = csrr_vlenb() / 4;
     const size_t vl = __riscv_vsetvl_e32m1(packn);
-#endif  // __riscv_vector
+#endif // __riscv_vector
 
     if (dims == 2)
     {
@@ -309,7 +309,6 @@ int LayerNorm_riscv::forward_inplace(Mat& bottom_top_blob, const Option& opt) co
 #if __riscv_vector
         if (elempack == packn)
         {
-
             #pragma omp parallel for num_threads(opt.num_threads)
             for (int i = 0; i < h; i++)
             {
@@ -318,7 +317,7 @@ int LayerNorm_riscv::forward_inplace(Mat& bottom_top_blob, const Option& opt) co
             }
         }
         else
-#endif  // __riscv_vector
+#endif // __riscv_vector
         {
             #pragma omp parallel for num_threads(opt.num_threads)
             for (int i = 0; i < h; i++)
@@ -347,7 +346,7 @@ int LayerNorm_riscv::forward_inplace(Mat& bottom_top_blob, const Option& opt) co
                 }
             }
             else
-#endif  // __riscv_vector
+#endif // __riscv_vector
             {
                 #pragma omp parallel for num_threads(opt.num_threads)
                 for (int q = 0; q < channels; q++)
@@ -373,7 +372,7 @@ int LayerNorm_riscv::forward_inplace(Mat& bottom_top_blob, const Option& opt) co
                 }
             }
             else
-#endif  // __riscv_vector
+#endif // __riscv_vector
             {
                 #pragma omp parallel for num_threads(opt.num_threads)
                 for (int q = 0; q < channels; q++)
