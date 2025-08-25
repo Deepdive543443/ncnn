@@ -417,7 +417,7 @@ int LayerNorm_riscv::forward_inplace_fp16s(Mat& bottom_top_blob, const Option& o
 #if __riscv_vector
     const int packn = csrr_vlenb() / 2; // fp16
     const size_t vl = __riscv_vsetvl_e16m1(packn);
-#endif  // __riscv_vector
+#endif // __riscv_vector
 
     if (dims == 1)
     {
@@ -448,7 +448,6 @@ int LayerNorm_riscv::forward_inplace_fp16s(Mat& bottom_top_blob, const Option& o
                 layernorm_fp16s(ptr, gamma_data, beta_data, eps, w, elempack);
             }
         }
-
     }
 
     if (dims == 3)
@@ -549,7 +548,6 @@ int LayerNorm_riscv::forward_inplace_fp16sa(Mat& bottom_top_blob, const Option& 
                 layernorm_fp16sa(ptr, gamma_data, beta_data, eps, w, elempack);
             }
         }
-
     }
 
     if (dims == 3)
