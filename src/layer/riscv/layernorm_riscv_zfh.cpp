@@ -527,20 +527,32 @@ int LayerNorm_riscv::forward_inplace_fp16sa(Mat& bottom_top_blob, const Option& 
     int h = bottom_top_blob.h;
     int channels = bottom_top_blob.c;
 
+#if __riscv_zvfh
+    const int packn = csrr_vlenb() / 2; // fp16
+    const size_t vl = __riscv_vsetvl_e16m1(packn);
+#endif
+
     if (dims == 1)
     {
         __fp16* ptr = bottom_top_blob;
         return layernorm_fp16sa(ptr, gamma_data, beta_data, eps, w * elempack, 1);
     }
 
-#if __riscv_zvfh
-    if (elempack == 1)
-#endif // __riscv_zvfh
+    if (dims == 2)
     {
-        if (dims == 2)
+#if __riscv_zvfh
+        if (elempack == packn)
         {
-            int w = bottom_top_blob.w;
-            int h = bottom_top_blob.h;
+            #pragma omp parallel for num_threads(opt.num_threads)
+            for (int i = 0; i < h; i++)
+            {
+                __fp16* ptr = bottom_top_blob.row<__fp16>(i);
+                layernorm_rvv_packn_fp16sa_procedure(w, ptr, gamma_data, beta_data, eps, affine, vl);
+            }
+        }
+#endif // __riscv_zvfh
+        if (elempack == 1)
+        {
             // assert affine_size == w
             #pragma omp parallel for num_threads(opt.num_threads)
             for (int i = 0; i < h; i++)
@@ -550,12 +562,38 @@ int LayerNorm_riscv::forward_inplace_fp16sa(Mat& bottom_top_blob, const Option& 
             }
         }
 
-        if (dims == 3)
+    }
+
+    if (dims == 3)
+    {
+#if __riscv_zvfh
+        if (elempack == packn)
         {
-            int w = bottom_top_blob.w;
-            int h = bottom_top_blob.h;
-            int channels = bottom_top_blob.c;
-            int size = w * h;
+            if (affine_size == w)
+            {
+                #pragma omp parallel for num_threads(opt.num_threads)
+                for (int q = 0; q < channels; q++)
+                {
+                    for (int i = 0; i < h; i++)
+                    {
+                        __fp16* ptr = bottom_top_blob.channel(q).row<__fp16>(i);
+                        layernorm_rvv_packn_fp16sa_procedure(w, ptr, gamma_data, beta_data, eps, affine, vl);
+                    }
+                }
+            }
+            else // if (affine_size == size)
+            {
+                #pragma omp parallel for num_threads(opt.num_threads)
+                for (int q = 0; q < channels; q++)
+                {
+                    __fp16* ptr = bottom_top_blob.channel(q);
+                    layernorm_rvv_packn_fp16sa_procedure(w * h, ptr, gamma_data, beta_data, eps, affine, vl);
+                }
+            }
+        }
+#endif // __riscv_zvfh
+        if (elempack == 1)
+        {
             if (affine_size == w)
             {
                 #pragma omp parallel for num_threads(opt.num_threads)
@@ -578,59 +616,8 @@ int LayerNorm_riscv::forward_inplace_fp16sa(Mat& bottom_top_blob, const Option& 
                 }
             }
         }
-        return 0;
-    }
-
-#if __riscv_zvfh
-    const int packn = csrr_vlenb() / 2; // fp16
-    if (elempack == packn)
-    {
-        const size_t vl = __riscv_vsetvl_e16m1(packn);
-        if (dims == 2)
-        {
-            int w = bottom_top_blob.w;
-            int h = bottom_top_blob.h;
-            // assert affine_size == w
-
-            #pragma omp parallel for num_threads(opt.num_threads)
-            for (int i = 0; i < h; i++)
-            {
-                __fp16* ptr = bottom_top_blob.row<__fp16>(i);
-                layernorm_rvv_packn_fp16sa_procedure(w, ptr, gamma_data, beta_data, eps, affine, vl);
-            }
-        }
-        if (dims == 3)
-        {
-            int w = bottom_top_blob.w;
-            int h = bottom_top_blob.h;
-            int channels = bottom_top_blob.c;
-            int size = w * h;
-
-            if (affine_size == w)
-            {
-                #pragma omp parallel for num_threads(opt.num_threads)
-                for (int q = 0; q < channels; q++)
-                {
-                    for (int i = 0; i < h; i++)
-                    {
-                        __fp16* ptr = bottom_top_blob.channel(q).row<__fp16>(i);
-                        layernorm_rvv_packn_fp16sa_procedure(w, ptr, gamma_data, beta_data, eps, affine, vl);
-                    }
-                }
-            }
-            else // if (affine_size == size)
-            {
-                #pragma omp parallel for num_threads(opt.num_threads)
-                for (int q = 0; q < channels; q++)
-                {
-                    __fp16* ptr = bottom_top_blob.channel(q);
-                    layernorm_rvv_packn_fp16sa_procedure(size, ptr, gamma_data, beta_data, eps, affine, vl);
-                }
-            }
-        }
     }
     return 0;
-#endif // __riscv_zvfh
 }
 #endif // NCNN_ZFH
 } // namespace ncnn
