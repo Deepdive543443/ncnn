@@ -93,6 +93,11 @@ static void convolution_transform_kernel_packed_rvv(const Mat& weight_data, Mat&
     }
 }
 
+static void convolution_transform_kernel_packed_int8_rvv(const Mat& weight_data, Mat& weight_data_tm, int num_input, int num_output, int kernel_w, int kernel_h, int elempack, int out_elempack)
+{
+    // TODO: Implement it or make convolution_transform_kernel_packed_rvv() support int8
+}
+
 int Convolution_riscv::create_pipeline(const Option& opt)
 {
     if (dynamic_weight)
@@ -230,6 +235,8 @@ int Convolution_riscv::forward(const Mat& bottom_blob, Mat& top_blob, const Opti
 #if NCNN_INT8
     if (opt.use_int8_inference && int8_scale_term)
     {
+        // TODO: Implement Convolution_riscv::forward_int8()
+        // ref: int Convolution_arm::forward_int8_arm
         Mat bottom_blob_unpacked = bottom_blob;
         if (bottom_blob.elempack != 1)
         {
@@ -684,5 +691,19 @@ int Convolution_riscv::forward(const std::vector<Mat>& bottom_blobs, std::vector
 
     return 0;
 }
+
+#if NCNN_INT8
+int Convolution_riscv::create_pipeline_int8(const Option& opt)
+{
+    // TODO implement it
+    return 0;
+}
+
+int Convolution_riscv::forward_int8(const Mat& bottom_blob, Mat& top_blob, const Option& opt) const
+{
+    // TODO implement it
+    return 0;
+}
+#endif // NCNN_INT8
 
 } // namespace ncnn
