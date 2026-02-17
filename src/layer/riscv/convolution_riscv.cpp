@@ -41,6 +41,10 @@ namespace ncnn {
 #include "convolution_7x7_pack1ton.h"
 #endif // __riscv_vector
 
+#if NCNN_INT8
+#include "convolution_packed_int8.h"
+#endif
+
 Convolution_riscv::Convolution_riscv()
 {
 #if __riscv_vector
@@ -55,6 +59,7 @@ Convolution_riscv::Convolution_riscv()
 #endif
 
     activation = 0;
+    nT = 0;
 }
 
 static void convolution_transform_kernel_packed_rvv(const Mat& weight_data, Mat& weight_data_tm, int num_input, int num_output, int kernel_w, int kernel_h, int elempack, int out_elempack)
@@ -232,6 +237,19 @@ int Convolution_riscv::create_pipeline(const Option& opt)
         {
             weight_data_tm = weight_data;
         }
+    }
+
+    scale_in_data.create(num_output);
+    for (int p = 0; p < num_output; p++)
+    {
+        // requantize and relu
+        float scale_in;
+        if (weight_data_int8_scales[p] == 0)
+            scale_in = 0;
+        else
+            scale_in = 1.f / (bottom_blob_int8_scales[0] * weight_data_int8_scales[p]);
+
+        scale_in_data[p] = scale_in;
     }
 
     if (opt.lightmode)
@@ -752,7 +770,101 @@ int Convolution_riscv::create_pipeline_int8(const Option& opt)
 
 int Convolution_riscv::forward_int8(const Mat& bottom_blob, Mat& top_blob, const Option& opt) const
 {
-    // TODO implement it
+#if __riscv_vector
+    const int packn_int8 = csrr_vlenb();
+    const int packn_int32 = csrr_vlenb() / 4;
+#endif
+
+    int elembits = bottom_blob.elembits();
+
+    Mat bottom_blob_int8 = bottom_blob;
+    if (elembits != 8)
+    {
+        Option opt_q = opt;
+        opt_q.blob_allocator = opt.workspace_allocator;
+        quantize_to_int8(bottom_blob, bottom_blob_int8, bottom_blob_int8_scales, opt_q);
+        if (bottom_blob_int8.empty())
+            return -100;
+    }
+
+    Mat bottom_blob_bordered;
+    make_padding(bottom_blob_int8, bottom_blob_bordered, opt);
+    if (bottom_blob_bordered.empty())
+        return -100;
+
+    int w = bottom_blob_bordered.w;
+    int h = bottom_blob_bordered.h;
+    int elempack = bottom_blob_bordered.elempack;
+
+    const int kernel_extent_w = dilation_w * (kernel_w - 1) + 1;
+    const int kernel_extent_h = dilation_h * (kernel_h - 1) + 1;
+
+    int outw = (w - kernel_extent_w) / stride_w + 1;
+    int outh = (h - kernel_extent_h) / stride_h + 1;
+
+    bool use_int8_requantize = int8_scale_term > 100;
+    int out_elempack = 1;
+
+#if __riscv_vector
+    if (opt.use_packing_layout)
+    {
+        if (use_int8_requantize)
+            out_elempack = num_output % packn_int8 == 0 ? packn_int8 : 1;
+        else
+            out_elempack = num_output % packn_int32 == 0 ? packn_int32 : 1;
+    }
+#endif
+    size_t out_elemsize = use_int8_requantize ? 1u * out_elempack : 4u * out_elempack;
+    if (opt.use_bf16_storage)
+        out_elemsize = use_int8_requantize ? 1u * out_elempack : 2u * out_elempack;
+
+    int channels = bottom_blob_bordered.c;
+    const int num_input = channels * elempack;
+
+    int out_elempack_int32 = 1;
+#if __riscv_vector
+    if (opt.use_packing_layout)
+        out_elempack_int32 = num_output % packn_int8 == 0 ? packn_int8 : 1;
+    else
+        out_elempack_int32 = num_output % packn_int32 == 0 ? packn_int32 : 1;
+#endif
+
+    Mat top_blob_int32;
+    top_blob_int32.create(outw, outh, num_output / out_elempack_int32, (size_t)(4u * out_elempack_int32), out_elempack_int32, opt.workspace_allocator);
+    if (top_blob_int32.empty())
+        return -100;
+
+    int _nT = nT ? nT : opt.num_threads;
+    if (nT != 0 && opt.num_threads != nT)
+    {
+        // force num_threads the same as in create_pipeline
+        // so we could use pre-packed A/B from the same tile config
+        NCNN_LOGE("opt.num_threads %d changed, convolution gemm will use load-time value %d", opt.num_threads, nT);
+    }
+
+    // TODO: Implement sgemm, winograd convolution for int8
+    convolution_packed_int8(bottom_blob_bordered, top_blob_int32, weight_data_tm, kernel_w, kernel_h, dilation_w, dilation_h, stride_w, stride_h, opt);
+
+    bottom_blob_bordered.release();
+
+    top_blob.create(outw, outh, num_output / out_elempack, out_elemsize, out_elempack, opt.blob_allocator);
+    if (top_blob.empty())
+        return -100;
+
+    if (use_int8_requantize)
+    {
+        requantize_from_int32_to_int8(top_blob_int32, top_blob, scale_in_data, top_blob_int8_scales, bias_data, activation_type, activation_params, opt);
+    }
+    else
+    {
+        dequantize_from_int32(top_blob_int32, top_blob, scale_in_data, bias_data, opt);
+
+        if (activation)
+        {
+            activation->forward_inplace(top_blob, opt);
+        }
+    }
+
     return 0;
 }
 #endif // NCNN_INT8

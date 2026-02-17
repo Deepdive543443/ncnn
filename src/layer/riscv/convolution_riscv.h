@@ -34,6 +34,8 @@ protected:
 public:
     Layer* activation;
 
+    int nT;
+
     Mat weight_data_tm;
     Mat weight_winograd23_data;
     Mat weight_winograd43_data;
@@ -41,6 +43,9 @@ public:
 
     // fp16
     Mat bias_data_fp16;
+#if NCNN_INT8
+    Mat scale_in_data;
+#endif
 };
 
 } // namespace ncnn
