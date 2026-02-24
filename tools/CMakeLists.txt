@@ -39,12 +39,18 @@ add_executable(ncnnmerge ncnnmerge.cpp)
 add_executable(pack_example pack_example.cpp)
 target_link_libraries(pack_example PRIVATE ncnn)
 
+add_executable(riscv_pg riscv_pg.cpp)
+target_link_libraries(riscv_pg PRIVATE ncnn)
+target_compile_options(riscv_pg PRIVATE -march=rv64gcv)
+
 # add all tools to a virtual project group
 set_property(TARGET ncnn2mem PROPERTY FOLDER "tools")
 set_property(TARGET ncnnoptimize PROPERTY FOLDER "tools")
 set_property(TARGET ncnnmerge PROPERTY FOLDER "tools")
 set_property(TARGET pack_example PROPERTY FOLDER "tools")
+set_property(TARGET riscv_pg PROPERTY FOLDER "tools")
 ncnn_install_tool(ncnn2mem)
 ncnn_install_tool(ncnnmerge)
 ncnn_install_tool(ncnnoptimize)
 ncnn_install_tool(pack_example)
+ncnn_install_tool(riscv_pg)
