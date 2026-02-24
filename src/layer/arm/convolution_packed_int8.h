@@ -40,6 +40,8 @@ static void convolution_transform_kernel_packed_int8(const Mat& kernel, Mat& ker
     if (outch >= 8)
     {
         if (inch >= 8)
+        // Src: flat, continuous, 16 bytes aligned weights [h * w * inch * outch] Type: int8
+        // Dst: [1, 2, 2] [maxk, inch/8, outch/8] Type: int8x64
             kernel_tm.create(maxk, inch / 8 + inch % 8, outch / 8 + (outch % 8) / 4 + (outch % 4) / 2 + outch % 2, (size_t)64u, 64);
         else
             kernel_tm.create(maxk, inch, outch / 8 + (outch % 8) / 4 + (outch % 4) / 2 + outch % 2, (size_t)8u, 8);
@@ -78,6 +80,12 @@ static void convolution_transform_kernel_packed_int8(const Mat& kernel, Mat& ker
 #if __ARM_NEON
     for (; q + 7 < outch; q += 8)
     {
+        // This indicated how out channels memories layout on weights
+        // 1 outch step = inch * w * h
+
+        // Weight:
+        // [*0,1,2,3,4,5,6,7,8,*9,10,11,12,13,14,15,16,17,*18,19,20,21,22,23,24,25,26,*27,28,29,30,31,32,33,34,35,*36,37,38,39,40,41,42,43,44,*45,46,47,
+        // [48,49,50,51,52,53,*54,55,56,57,58,59,60,61,62,*63,64,65,66,67,68,69,70,71,*72,73,74,75,76,77,78,79,80]
         const signed char* kptr0 = (const signed char*)kernel + q * inch * maxk;
         const signed char* kptr1 = (const signed char*)kernel + (q + 1) * inch * maxk;
         const signed char* kptr2 = (const signed char*)kernel + (q + 2) * inch * maxk;
@@ -92,6 +100,7 @@ static void convolution_transform_kernel_packed_int8(const Mat& kernel, Mat& ker
         int p = 0;
         for (; p + 7 < inch; p += 8)
         {
+            // Loop through each kernel's pixel
             for (int k = 0; k < maxk; k++)
             {
                 const signed char* k0 = kptr0 + k;
@@ -200,6 +209,7 @@ static void convolution_transform_kernel_packed_int8(const Mat& kernel, Mat& ker
 #else  // __ARM_FEATURE_MATMUL_INT8 || __ARM_FEATURE_DOTPROD
                 for (int i = 0; i < 4; i++)
                 {
+                    // maxk = 1 inchal step, I suppose
                     g00[0] = k0[0];
                     g00[1] = k0[maxk];
                     g00[2] = k1[0];
@@ -216,6 +226,9 @@ static void convolution_transform_kernel_packed_int8(const Mat& kernel, Mat& ker
                     g00[13] = k6[maxk];
                     g00[14] = k7[0];
                     g00[15] = k7[maxk];
+ 
+                    // g00 step for the next 1/4 of the packing
+                    // kptrs step two inchannels forward
                     g00 += 16;
                     k0 += maxk * 2;
                     k1 += maxk * 2;
@@ -229,6 +242,7 @@ static void convolution_transform_kernel_packed_int8(const Mat& kernel, Mat& ker
 #endif // __ARM_FEATURE_MATMUL_INT8 || __ARM_FEATURE_DOTPROD
             }
 
+            // Step eight inchannels forward
             kptr0 += maxk * 8;
             kptr1 += maxk * 8;
             kptr2 += maxk * 8;
@@ -250,6 +264,8 @@ static void convolution_transform_kernel_packed_int8(const Mat& kernel, Mat& ker
                 const signed char* k5 = kptr5 + k;
                 const signed char* k6 = kptr6 + k;
                 const signed char* k7 = kptr7 + k;
+                // Weights remain: 
+                // [8,17,26,35,44,53,62,71,80]
 
                 g00[0] = k0[0];
                 g00[1] = k1[0];
@@ -538,6 +554,7 @@ static void convolution_packed_int8(const Mat& bottom_blob, Mat& top_blob, const
 
     const size_t N = bottom_blob.cstep * elempack;
 
+    // The Top blob (output blob here is int32, with different element size)
     const int outw = top_blob.w;
     const int outh = top_blob.h;
     const int out_elempack = top_blob.elempack;
@@ -567,6 +584,8 @@ static void convolution_packed_int8(const Mat& bottom_blob, Mat& top_blob, const
     int nn_outch = 0;
     int remain_outch_start = 0;
 #if __ARM_NEON
+    // If you don't have more than 8 output channel, this loop won't be execute
+    // Nice engineering out there, UP
     nn_outch = (outch - remain_outch_start) / 8;
     #pragma omp parallel for num_threads(opt.num_threads)
     for (int pp = 0; pp < nn_outch; pp++)
@@ -617,12 +636,15 @@ static void convolution_packed_int8(const Mat& bottom_blob, Mat& top_blob, const
                         }
                         else // if (elempack == 1)
                         {
+                            // N at here is the "actual" cstep, the cstep in bytes. Cstep from matrix is the cstep of element.
+                            // I hear that RISC V can handle this with strided load?
                             signed char tmp0[8] = {r0s[0], r0s[N], r0s[N * 2], r0s[N * 3], r0s[N * 4], r0s[N * 5], r0s[N * 6], r0s[N * 7]};
                             signed char tmp1[8] = {r1s[0], r1s[N], r1s[N * 2], r1s[N * 3], r1s[N * 4], r1s[N * 5], r1s[N * 6], r1s[N * 7]};
                             _r0 = vld1_s8(tmp0);
                             _r1 = vld1_s8(tmp1);
                         }
 
+                        // Load a pack of transformed weight data from weight_data_tm
                         int8x16_t _w0 = vld1q_s8(kptr);
                         int8x16_t _w1 = vld1q_s8(kptr + 16);
                         int8x16_t _w2 = vld1q_s8(kptr + 32);
@@ -644,14 +666,20 @@ static void convolution_packed_int8(const Mat& bottom_blob, Mat& top_blob, const
                         _sum2 = vdotq_lane_s32(_sum2, _w2, _r1, 1);
                         _sum3 = vdotq_lane_s32(_sum3, _w3, _r1, 1);
 #else  // __ARM_FEATURE_MATMUL_INT8 || __ARM_FEATURE_DOTPROD
+                        // I assume we don't do sth like matmul and dotprod in RISCV
+                        // So we jump to here directly
                         int16x4_t _rr0 = vreinterpret_s16_s8(_r0);
                         int16x4_t _rr1 = vreinterpret_s16_s8(_r1);
 
+                        // Looking like we loaded two int8 and duplicated them four times
+                        // If the first two int8 of _r0 is [33, 39], we have [33, 39, 33, 39, 33, 39, 33, 39]
+                        // Remember during packing we we placed two to them side by side?
                         int8x8_t _r0ll = vreinterpret_s8_s16(vdup_lane_s16(_rr0, 0));
                         int8x8_t _r1ll = vreinterpret_s8_s16(vdup_lane_s16(_rr1, 0));
                         int8x8_t _r0hl = vreinterpret_s8_s16(vdup_lane_s16(_rr0, 2));
                         int8x8_t _r1hl = vreinterpret_s8_s16(vdup_lane_s16(_rr1, 2));
 
+                        // Wi
                         int16x8_t _s0l = vmull_s8(_r0ll, vget_low_s8(_w0));
                         int16x8_t _s1l = vmull_s8(_r0ll, vget_high_s8(_w0));
                         int16x8_t _s2l = vmull_s8(_r1ll, vget_low_s8(_w0));
