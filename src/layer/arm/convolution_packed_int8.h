@@ -226,7 +226,7 @@ static void convolution_transform_kernel_packed_int8(const Mat& kernel, Mat& ker
                     g00[13] = k6[maxk];
                     g00[14] = k7[0];
                     g00[15] = k7[maxk];
- 
+
                     // g00 step for the next 1/4 of the packing
                     // kptrs step two inchannels forward
                     g00 += 16;
@@ -264,7 +264,7 @@ static void convolution_transform_kernel_packed_int8(const Mat& kernel, Mat& ker
                 const signed char* k5 = kptr5 + k;
                 const signed char* k6 = kptr6 + k;
                 const signed char* k7 = kptr7 + k;
-                // Weights remain: 
+                // Weights remain:
                 // [8,17,26,35,44,53,62,71,80]
 
                 g00[0] = k0[0];
@@ -665,9 +665,9 @@ static void convolution_packed_int8(const Mat& bottom_blob, Mat& top_blob, const
                         _sum1 = vdotq_lane_s32(_sum1, _w3, _r0, 1);
                         _sum2 = vdotq_lane_s32(_sum2, _w2, _r1, 1);
                         _sum3 = vdotq_lane_s32(_sum3, _w3, _r1, 1);
-#else  // __ARM_FEATURE_MATMUL_INT8 || __ARM_FEATURE_DOTPROD
-                        // I assume we don't do sth like matmul and dotprod in RISCV
-                        // So we jump to here directly
+#else  // __ARM_FEATURE_MATMUL_INT8 || __ARM_FEATURE_DOTPROD        \
+// I assume we don't do sth like matmul and dotprod in RISCV \
+// So we jump to here directly
                         int16x4_t _rr0 = vreinterpret_s16_s8(_r0);
                         int16x4_t _rr1 = vreinterpret_s16_s8(_r1);
 

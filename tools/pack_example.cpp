@@ -6,7 +6,7 @@
 #define W            2
 #define H            2
 #define D            3
-#define CHANNEL_SIZE W * H * D
+#define CHANNEL_SIZE W* H* D
 #define C            16
 #define PACK_SIZE    16
 
