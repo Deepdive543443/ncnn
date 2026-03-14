@@ -1,6 +1,5 @@
 #include <iostream>
 #include <vector>
-#include <cmath>
 #include <stdlib.h>
 
 #if __riscv_vector
@@ -46,12 +45,17 @@ int main(int argc, char** argv)
 
     std::cout << "]" << std::endl;
 
-    std::vector<size_t> packs(static_cast<int>(std::log2(vlmax_e32m8 / 2)));
-    for (int i = 0; i < packs.size(); i++)
-        packs[i] = 1 << i;
+    std::vector<size_t> packs;
+    for (size_t i = vl >> 1; i != 0; i = (i >> 1))
+        packs.push_back(i);
 
-    for (size_t& i : packs)
-        std::cout << i << std::endl;
+    for (int i = 0; i < packs.size(); i++)
+    {
+        for (int j = 0; j < packs.size(); j++)
+        {
+            std::cout << packs[i] << " " << packs[j] << std::endl;
+        }
+    }
 
     return 0;
 #else
