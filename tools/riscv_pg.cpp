@@ -1,6 +1,5 @@
 #include <iostream>
 #include <vector>
-#include <cmath>
 #include <stdlib.h>
 
 #if __riscv_vector
@@ -22,21 +21,21 @@ int main(int argc, char** argv)
 #if __riscv_vector
     const size_t vl = csrr_vlenb();
     const size_t vlmax_e32m8 = __riscv_vsetvlmax_e32m8();
-    const size_t vlmax_e16m8 = __riscv_vsetvlmax_e16m8();
-    const size_t vlmax_e8m8 = __riscv_vsetvlmax_e8m8();
+    const size_t vlmax_e16m4 = __riscv_vsetvlmax_e16m4();
+    const size_t vlmax_e8m2 = __riscv_vsetvlmax_e8m2();
 
     std::cout << "Vector Length in bytes: " << vl << std::endl;
     std::cout << "Maximum 32 bit elements: " << vlmax_e32m8 << std::endl;
-    std::cout << "Maximum 16 bit elements: " << vlmax_e16m8 << std::endl;
-    std::cout << "Maximum  8 bit elements: " << vlmax_e8m8 << std::endl;
+    std::cout << "Maximum 16 bit elements: " << vlmax_e16m4 << std::endl;
+    std::cout << "Maximum  8 bit elements: " << vlmax_e8m2 << std::endl;
 
     std::vector<int32_t> s(vlmax_e32m8, 0);
 
-    vint8m2_t vs = __riscv_vmv_v_x_i8m2(2, vlmax_e32m8);
-    vint8m2_t va = __riscv_vmv_v_x_i8m2(4, vlmax_e32m8);
-    vint16m4_t vb = __riscv_vmv_v_x_i16m4(1, vlmax_e32m8);
+    vint8m2_t vs = __riscv_vmv_v_x_i8m2(2, vlmax_e8m2);
+    vint8m2_t va = __riscv_vmv_v_x_i8m2(4, vlmax_e8m2);
+    vint16m4_t vb = __riscv_vmv_v_x_i16m4(1, vlmax_e16m4);
 
-    vint32m8_t vresult = __riscv_vwadd_vv_i32m8(vb, __riscv_vwmul_vv_i16m4(vs, va, vlmax_e32m8), vlmax_e32m8);
+    vint32m8_t vresult = __riscv_vwadd_vv_i32m8(vb, __riscv_vwmul_vv_i16m4(vs, va, vlmax_e16m4), vlmax_e32m8);
 
     __riscv_vse32_v_i32m8(&s[0], vresult, vlmax_e32m8);
 
@@ -46,12 +45,17 @@ int main(int argc, char** argv)
 
     std::cout << "]" << std::endl;
 
-    std::vector<size_t> packs(static_cast<int>(std::log2(vlmax_e32m8 / 2)));
-    for (int i = 0; i < packs.size(); i++)
-        packs[i] = 1 << i;
+    std::vector<size_t> packs;
+    for (size_t i = vl >> 1; i != 0; i = (i >> 1))
+        packs.push_back(i);
 
-    for (size_t& i : packs)
-        std::cout << i << std::endl;
+    for (int i = 0; i < packs.size(); i++)
+    {
+        for (int j = 0; j < packs.size(); j++)
+        {
+            std::cout << packs[i] << " " << packs[j] << std::endl;
+        }
+    }
 
     return 0;
 #else
