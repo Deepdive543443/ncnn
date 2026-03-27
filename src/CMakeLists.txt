@@ -740,6 +740,8 @@ if(NCNN_ASAN)
     target_link_libraries(ncnn PUBLIC -fsanitize=address)
 endif()
 
+target_compile_options(ncnn PRIVATE -g)
+
 add_dependencies(ncnn ncnn-generate-spirv)
 
 if(NCNN_INSTALL_SDK)
