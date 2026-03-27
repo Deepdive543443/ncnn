@@ -711,7 +711,7 @@ int Convolution_riscv::forward_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
         Option opt_q = opt;
         opt_q.blob_allocator = opt.workspace_allocator;
 #if NCNN_ZFH
-        if (opt.use_fp16_storage && elembits == 16)
+        if (support_fp16_storage && opt.use_fp16_storage && elembits == 16)
         {
             Mat bottom_blob_fp32;
             cast_float16_to_float32(bottom_blob, bottom_blob_fp32, opt);
@@ -763,6 +763,12 @@ int Convolution_riscv::forward_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
     }
 #endif // __riscv_vector
     size_t out_elemsize = use_int8_requantize ? 1u * out_elempack : 4u * out_elempack;
+#if NCNN_ZFH
+    if (support_fp16_storage && opt.use_fp16_storage)
+    {
+        out_elemsize = use_int8_requantize ? 1u * out_elempack : 2u * out_elempack;
+    }
+#endif // NCNN_ZFH
     if (opt.use_bf16_storage)
         out_elemsize = use_int8_requantize ? 1u * out_elempack : 2u * out_elempack;
 
