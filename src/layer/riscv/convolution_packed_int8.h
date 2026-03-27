@@ -155,7 +155,7 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
     const size_t vlm4 = __riscv_vsetvlmax_e32m4();
 
     nn_outch = (outch - remain_outch_start) / vlm1;
-    #pragma omp parallel for num_threads(opt.num_threads)
+    // #pragma omp parallel for num_threads(opt.num_threads)
     for (int pp = 0; pp < nn_outch; pp++)
     {
         const int p = remain_outch_start + pp * vlm1;
@@ -204,7 +204,6 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
                             _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm4);
                         }
                     }
-                    kptr += vlm1 * vlm1;
                 }
             }
             for (; q < inch; q++)
@@ -217,7 +216,6 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
                     vint8m1_t _w = __riscv_vle8_v_i8m1(kptr, vlm1);
                     vint16m2_t _s = __riscv_vwmul_vx_i16m2(_w, r0s[0], vlm2);
                     _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm4);
-                    kptr += vlm1;
                 }
             }
 
@@ -240,7 +238,7 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
 
     remain_outch_start += nn_outch * vlm1;
 #endif // __riscv_vector
-    #pragma omp parallel for num_threads(opt.num_threads)
+    // #pragma omp parallel for num_threads(opt.num_threads)
     for (int p = remain_outch_start; p < outch; p++)
     {
         int* outptr = top_blob.channel(p);
