@@ -241,7 +241,8 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
     // #pragma omp parallel for num_threads(opt.num_threads)
     for (int p = remain_outch_start; p < outch; p++)
     {
-        int* outptr = top_blob.channel(p);
+        int* outptr = top_blob.channel(p / out_elempack);
+        int lane = p % out_elempack;
 
         int ij = 0;
         for (; ij < outw * outh; ij++)
@@ -283,12 +284,12 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
                 for (int k = 0; k < maxk; k++)
                 {
                     const signed char* r0s = r0 + space_ofs[k];
-                    sum += r0s[0] * kptr[0];
+                    sum += r0s[lane] * kptr[0];
                     kptr++;
                 }
             }
-            outptr[0] = sum;
-            outptr += 1;
+            outptr[lane] = sum;
+            outptr += out_elempack;
         }
     }
 
