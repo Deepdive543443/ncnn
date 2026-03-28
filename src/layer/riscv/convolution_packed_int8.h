@@ -117,12 +117,12 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
     const int elempack = bottom_blob.elempack;
     const int inch = bottom_blob.c * elempack;
 
-    const size_t N = bottom_blob.cstep * elempack;
-
     const int outw = top_blob.w;
     const int outh = top_blob.h;
     const int out_elempack = top_blob.elempack;
     const int outch = top_blob.c * out_elempack;
+    const size_t N = bottom_blob.cstep * elempack;
+    const size_t M = top_blob.cstep * out_elempack;
 
     const int maxk = kernel_w * kernel_h;
 
@@ -159,13 +159,6 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
     for (int pp = 0; pp < nn_outch; pp++)
     {
         const int p = remain_outch_start + pp * vlm1;
-
-        // shadowed variable for less openmp task args
-        const int outw = top_blob.w;
-        const int outh = top_blob.h;
-        const size_t N = bottom_blob.cstep * elempack;
-        const size_t M = top_blob.cstep * out_elempack;
-
         int* outptr = top_blob.channel(p / out_elempack);
 
         int ij = 0;
