@@ -1784,6 +1784,8 @@ int test_layer_opt(const char* layer_type, const ncnn::ParamDict& pd, const std:
         return ret;
     }
 
+    fprintf(stderr, "test_layer %s success pack=%d fp16p=%d fp16s=%d fp16a=%d bf16p=%d bf16s=%d sgemm=%d winograd=%d\n", layer_type, opt.use_packing_layout, opt.use_fp16_packed, opt.use_fp16_storage, opt.use_fp16_arithmetic, opt.use_bf16_packed, opt.use_bf16_storage, opt.use_sgemm_convolution, opt.use_winograd_convolution);
+
     return 0;
 }
 
@@ -1863,6 +1865,8 @@ int test_layer_opt(const char* layer_type, const ncnn::ParamDict& pd, const std:
         return ret;
     }
 
+    fprintf(stderr, "test_layer %s success pack=%d fp16p=%d fp16s=%d fp16a=%d bf16p=%d bf16s=%d sgemm=%d winograd=%d\n", layer_type, opt.use_packing_layout, opt.use_fp16_packed, opt.use_fp16_storage, opt.use_fp16_arithmetic, opt.use_bf16_packed, opt.use_bf16_storage, opt.use_sgemm_convolution, opt.use_winograd_convolution);
+    fprintf(stderr, "w=%d h=%d c=%d\n", top_shape.w, top_shape.h, top_shape.c);
     return 0;
 }
 
