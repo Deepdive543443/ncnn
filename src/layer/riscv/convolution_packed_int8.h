@@ -62,7 +62,6 @@ static void convolution_transform_kernel_packed_int8_rvv(const Mat& kernel, Mat&
                     __riscv_vse8_v_i8m1(g00, row, packn);
                     g00 += packn;
                 }
-                kptr += inch * maxk;
             }
         }
         for (; p < inch; p++)
@@ -74,7 +73,6 @@ static void convolution_transform_kernel_packed_int8_rvv(const Mat& kernel, Mat&
                 __riscv_vse8_v_i8m1(g00, row, packn);
                 g00 += packn;
             }
-            kptr += maxk;
         }
     }
     for (; q + packn_int32 - 1 < outch; q += packn_int32)
@@ -91,7 +89,6 @@ static void convolution_transform_kernel_packed_int8_rvv(const Mat& kernel, Mat&
                 __riscv_vse8_v_i8m1(g00, row, packn_int32);
                 g00 += packn_int32;
             }
-            kptr += maxk;
         }
     }
 #endif // __riscv_vector
