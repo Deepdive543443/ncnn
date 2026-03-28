@@ -251,25 +251,45 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
 
             vint32m4_t _sum = __riscv_vmv_v_x_i32m4(0, vlm4);
             const signed char* kptr = weight_data_tm.channel(p / packn + (p % packn) / packn_32);
-
-            for (int q = 0; q < inch; q++)
+            int q = 0;
+            for (; q + packn -1 < inch; q += packn)
             {
-                const signed char* r0 = bottom_blob.channel(q).row<const signed char>(i * stride_h) + j * stride_w;
+                const signed char* r0 = bottom_blob.channel(q / elempack).row<const signed char>(i * stride_h) + j * stride_w * elempack;
+                
                 for (int k = 0; k < maxk; k++)
                 {
                     const signed char* r0s = r0 + space_ofs[k];
                     if (elempack == packn)
                     {
-                        vint8m1_t _w = __riscv_vle8_v_i8m1(kptr + q * packn_32, vlm1);
-                        vint16m2_t _s = __riscv_vwmul_vx_i16m2(_w, r0s[i], vlm2);
-                        _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm4);
+                        for (int z = 0; z < packn; z++)
+                        {
+                            vint8m1_t _w = __riscv_vle8_v_i8m1(kptr + (q + z) * packn_32, vlm1);
+                            vint16m2_t _s = __riscv_vwmul_vx_i16m2(_w, r0s[z], vlm2);
+                            _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm4);
+                        }
                     }
                     else
                     {
-                        vint8m1_t _w = __riscv_vle8_v_i8m1(kptr + q * packn_32, vlm1);
-                        vint16m2_t _s = __riscv_vwmul_vx_i16m2(_w, r0s[i * N], vlm2);
-                        _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm4);
+                        for (int z = 0; z < packn; z++)
+                        {
+                            vint8m1_t _w = __riscv_vle8_v_i8m1(kptr + (q + z) * packn_32, vlm1);
+                            vint16m2_t _s = __riscv_vwmul_vx_i16m2(_w, r0s[z * N], vlm2);
+                            _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm4);
+                        }
                     }
+                }
+            }
+
+            for (; q < inch; q++)
+            {
+                // If we reach here, bottom blob must unpacked
+                const signed char* r0 = bottom_blob.channel(q).row<const signed char>(i * stride_h) + j * stride_w;
+                for (int k = 0; k < maxk; k++)
+                {
+                    const signed char* r0s = r0 + space_ofs[k];
+                    vint8m1_t _w = __riscv_vle8_v_i8m1(kptr + q * packn_32, vlm1);
+                    vint16m2_t _s = __riscv_vwmul_vx_i16m2(_w, r0s[0], vlm2);
+                    _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm4);
                 }
             }
 
