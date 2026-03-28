@@ -13,21 +13,29 @@ static void convolution_transform_kernel_packed_int8_rvv(const Mat& kernel, Mat&
     // clang-format off
     // *INDENT-OFF*
 #if __riscv_vector
-    const size_t packn = csrr_vlenb();
+    const int packn = csrr_vlenb();
+    const int packn_int32 = csrr_vlenb() / 4;
     const int vlm1 = packn; 
-    if (outch >= vlm1)
+    if (outch >= packn)
     {
-        if (inch >= vlm1)
-            kernel_tm.create(maxk, inch / vlm1 + inch % vlm1, outch / vlm1 + outch % vlm1, (size_t)(vlm1 * vlm1), vlm1 * vlm1);
+        if (inch >= packn)
+            kernel_tm.create(maxk, inch / packn + inch % packn, outch / packn + (outch % packn) / packn_int32 + outch % packn_int32, (size_t)(packn * packn), packn * packn);
         else
-            kernel_tm.create(maxk, inch, outch / vlm1 + outch % vlm1, (size_t)vlm1, vlm1);
+            kernel_tm.create(maxk, inch, outch / packn + outch % packn, (size_t)packn, packn);
+    }
+    else if (outch >= packn_int32)
+    {
+        if (inch >= packn)
+            kernel_tm.create(maxk, inch / packn + inch % packn, outch / packn_int32 + outch % packn_int32, (size_t)(packn * packn_int32), packn * packn_int32);
+        else
+            kernel_tm.create(maxk, inch, outch / packn_int32 + outch % packn_int32, (size_t)packn, packn);
     }
     else
 #endif // __riscv_vector
     {
 #if __riscv_vector
-        if (inch >= vlm1)
-            kernel_tm.create(maxk, inch / vlm1 + inch % vlm1, outch, (size_t)vlm1, vlm1);
+        if (inch >= packn)
+            kernel_tm.create(maxk, inch / packn + inch % packn, outch, (size_t)packn, packn);
         else
 #endif // __riscv_vector
             kernel_tm.create(maxk, inch, outch, (size_t)1u, 1);
@@ -37,23 +45,22 @@ static void convolution_transform_kernel_packed_int8_rvv(const Mat& kernel, Mat&
 
     int q = 0;
 #if __riscv_vector
-    ptrdiff_t stride_bytes = inch * maxk;
-    for (; q + vlm1 - 1 < outch; q += vlm1)
+    for (; q + packn - 1 < outch; q += packn)
     {
         const signed char* kptr = (const signed char*)kernel + q * inch * maxk;
-        signed char* g00 = kernel_tm.channel(q / vlm1);
+        signed char* g00 = kernel_tm.channel(q / packn);
 
         int p = 0;
-        for (; p + vlm1 - 1 < inch; p += vlm1)
+        for (; p + packn - 1 < inch; p += packn)
         {
             for (int k = 0; k < maxk; k++)
             {
-                for (size_t i = 0; i < vlm1; i++)
+                for (size_t i = 0; i < packn; i++)
                 {
                     const signed char* src = kptr + (p + i) * maxk + k;
-                    vint8m1_t row = __riscv_vlse8_v_i8m1(src, stride_bytes, vlm1);
-                    __riscv_vse8_v_i8m1(g00, row, vlm1);
-                    g00 += vlm1;
+                    vint8m1_t row = __riscv_vlse8_v_i8m1(src, inch * maxk, packn);
+                    __riscv_vse8_v_i8m1(g00, row, packn);
+                    g00 += packn;
                 }
                 kptr += inch * maxk;
             }
@@ -63,9 +70,26 @@ static void convolution_transform_kernel_packed_int8_rvv(const Mat& kernel, Mat&
             for (int k = 0; k < maxk; k++)
             {
                 const signed char* src = kptr + p * maxk + k;
-                vint8m1_t row = __riscv_vlse8_v_i8m1(src, stride_bytes, vlm1);
-                __riscv_vse8_v_i8m1(g00, row, vlm1);
-                g00 += vlm1;
+                vint8m1_t row = __riscv_vlse8_v_i8m1(src, inch * maxk, packn);
+                __riscv_vse8_v_i8m1(g00, row, packn);
+                g00 += packn;
+            }
+            kptr += maxk;
+        }
+    }
+    for (; q + packn_int32 - 1 < outch; q += packn_int32)
+    {
+        const signed char* kptr = (const signed char*)kernel + q * inch * maxk;
+        signed char* g00 = kernel_tm.channel(q / packn + (q % packn) / packn_int32);
+        int p = 0;
+        for (; p < inch; p++)
+        {
+            for (int k = 0; k < maxk; k++)
+            {
+                const signed char* src = kptr + p * maxk + k;
+                vint8m1_t row = __riscv_vlse8_v_i8m1(src, inch * maxk, packn_int32);
+                __riscv_vse8_v_i8m1(g00, row, packn_int32);
+                g00 += packn_int32;
             }
             kptr += maxk;
         }
@@ -75,27 +99,27 @@ static void convolution_transform_kernel_packed_int8_rvv(const Mat& kernel, Mat&
     {
         const signed char* kptr = (const signed char*)kernel + q * inch * maxk;
 #if __riscv_vector
-        signed char* g00 = kernel_tm.channel(q / vlm1 + q % vlm1);
+        signed char* g00 = kernel_tm.channel(q / packn + (q % packn) / packn_int32 + q % packn_int32);
 #else
         signed char* g00 = kernel_tm.channel(q);
 #endif
 
         int p = 0;
 #if __riscv_vector
-        for (; p + vlm1 - 1 < inch; p += vlm1)
+        for (; p + packn - 1 < inch; p += packn)
         {
             for (int k = 0; k < maxk; k++)
             {
                 const signed char* k0 = kptr + k;
 
-                for (size_t i = 0; i < vlm1; i++)
+                for (size_t i = 0; i < packn; i++)
                 {
                     g00[0] = k0[0];
                     k0 += maxk;
                     g00 += 1;
                 }
             }
-            kptr += maxk * vlm1;
+            kptr += maxk * packn;
         }
 #endif // __riscv_vector
         for (; p < inch; p++)
@@ -232,6 +256,7 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
     remain_outch_start += nn_outch * vlm1;
 #endif // __riscv_vector
     // #pragma omp parallel for num_threads(opt.num_threads)
+    printf("[DEBUG] remain_outch_start = %d\n", remain_outch_start);
     for (int p = remain_outch_start; p < outch; p++)
     {
         int* outptr = top_blob.channel(p / out_elempack);
