@@ -21,14 +21,14 @@ static void convolution_transform_kernel_packed_int8_rvv(const Mat& kernel, Mat&
         if (inch >= packn)
             kernel_tm.create(maxk, inch / packn + inch % packn, outch / packn + (outch % packn) / packn_int32 + outch % packn_int32, (size_t)(packn * packn), packn * packn);
         else
-            kernel_tm.create(maxk, inch, outch / packn + outch % packn, (size_t)packn, packn);
+            kernel_tm.create(maxk, inch, outch / packn + (outch % packn) / packn_int32 + outch % packn_int32, (size_t)packn, packn);
     }
     else if (outch >= packn_int32)
     {
         if (inch >= packn)
             kernel_tm.create(maxk, inch / packn + inch % packn, outch / packn_int32 + outch % packn_int32, (size_t)(packn * packn_int32), packn * packn_int32);
         else
-            kernel_tm.create(maxk, inch, outch / packn_int32 + outch % packn_int32, (size_t)packn, packn);
+            kernel_tm.create(maxk, inch, outch / packn_int32 + outch % packn_int32, (size_t)packn_int32, packn_int32);
     }
     else
 #endif // __riscv_vector
@@ -260,18 +260,22 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
                     {
                         for (int z = 0; z < packn; z++)
                         {
-                            vint8m1_t _w = __riscv_vle8_v_i8m1(kptr + (q + z) * packn_32, vlm1);
+                            vint8m1_t _w = __riscv_vle8_v_i8m1(kptr, vlm1);
                             vint16m2_t _s = __riscv_vwmul_vx_i16m2(_w, r0s[z], vlm2);
                             _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm4);
+
+                            kptr += packn_32;
                         }
                     }
                     else
                     {
                         for (int z = 0; z < packn; z++)
                         {
-                            vint8m1_t _w = __riscv_vle8_v_i8m1(kptr + (q + z) * packn_32, vlm1);
+                            vint8m1_t _w = __riscv_vle8_v_i8m1(kptr, vlm1);
                             vint16m2_t _s = __riscv_vwmul_vx_i16m2(_w, r0s[z * N], vlm2);
                             _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm4);
+
+                            kptr += packn_32;
                         }
                     }
                 }
@@ -284,9 +288,11 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
                 for (int k = 0; k < maxk; k++)
                 {
                     const signed char* r0s = r0 + space_ofs[k];
-                    vint8m1_t _w = __riscv_vle8_v_i8m1(kptr + q * packn_32, vlm1);
+                    vint8m1_t _w = __riscv_vle8_v_i8m1(kptr, vlm1);
                     vint16m2_t _s = __riscv_vwmul_vx_i16m2(_w, r0s[0], vlm2);
                     _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm4);
+
+                    kptr += packn_32;
                 }
             }
 

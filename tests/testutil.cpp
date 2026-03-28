@@ -1630,6 +1630,27 @@ int test_layer_gpu(int typeindex, const ncnn::ParamDict& pd, const std::vector<n
 }
 #endif // NCNN_VULKAN
 
+
+
+template <typename T>
+void pretty_print(const ncnn::Mat& m)
+{
+    fprintf(stderr,"shape: %d x %d x %d\n", m.w, m.h, m.c);
+    for (int q=0; q<m.c; q++)
+    {
+        const T* ptr = m.channel(q);
+        for (int y=0; y<m.h; y++)
+        {
+            for (int x=0; x<m.w; x++)
+            {
+                fprintf(stderr, "%f ", (float)ptr[x]);
+            }
+            ptr += m.w;
+            fprintf(stderr, "\n");
+        }
+        fprintf(stderr, "------------------------\n");
+    }
+}
 int test_layer(int typeindex, const ncnn::ParamDict& pd, const std::vector<ncnn::Mat>& weights, const ncnn::Option& _opt, const ncnn::Mat& a, const ncnn::Mat& top_shape, float epsilon, int flag)
 {
     // naive
@@ -1650,6 +1671,23 @@ int test_layer(int typeindex, const ncnn::ParamDict& pd, const std::vector<ncnn:
         if (ret != 233 && (ret != 0 || CompareMat(b, c, epsilon) != 0))
         {
             fprintf(stderr, "test_layer_cpu failed\n");
+
+            fprintf(stderr, "Input:\n");
+            pretty_print<float>(a);
+
+            fprintf(stderr, "num_weights: %zu\n", weights.size());
+
+            for (size_t i = 0; i < weights.size(); i++)
+            {
+                fprintf(stderr, "weight %zu:\n", i);
+                pretty_print<float>(weights[i]);
+            }
+
+            fprintf(stderr, "Expected output:\n");
+            pretty_print<float>(b);
+
+            fprintf(stderr, "Un-Expected output:\n");
+            pretty_print<float>(c);
             return -1;
         }
     }
