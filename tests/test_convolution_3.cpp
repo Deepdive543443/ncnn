@@ -211,7 +211,6 @@ static int test_convolution_int8(int w, int h, int c, int outch, int kernel, int
         }
 
         fprintf(stderr, "test_convolution_int8 success w=%d h=%d c=%d outch=%d kernel=%d dilation=%d stride=%d pad=%d bias=%d requant=%d act=%d actparams=[%f,%f]\n", w, h, c, outch, kernel, dilation, stride, pad, bias, requant, activation_type, activation_params[0], activation_params[1]);
-
     }
 
     {
@@ -234,7 +233,6 @@ static int test_convolution_int8(int w, int h, int c, int outch, int kernel, int
         }
 
         fprintf(stderr, "test_convolution_int8 success w=%d h=%d c=%d outch=%d kernel=%d dilation=%d stride=%d pad=%d bias=%d requant=%d act=%d actparams=[%f,%f]\n", w, h, c, outch, kernel, dilation, stride, pad, bias, requant, activation_type, activation_params[0], activation_params[1]);
-
     }
 
     {
@@ -256,7 +254,6 @@ static int test_convolution_int8(int w, int h, int c, int outch, int kernel, int
             return ret;
         }
         fprintf(stderr, "test_convolution_int8 success w=%d h=%d c=%d outch=%d kernel=%d dilation=%d stride=%d pad=%d bias=%d requant=%d act=%d actparams=[%f,%f]\n", w, h, c, outch, kernel, dilation, stride, pad, bias, requant, activation_type, activation_params[0], activation_params[1]);
-
     }
 
     {
@@ -278,7 +275,6 @@ static int test_convolution_int8(int w, int h, int c, int outch, int kernel, int
             return ret;
         }
         fprintf(stderr, "test_convolution_int8 success w=%d h=%d c=%d outch=%d kernel=%d dilation=%d stride=%d pad=%d bias=%d requant=%d act=%d actparams=[%f,%f]\n", w, h, c, outch, kernel, dilation, stride, pad, bias, requant, activation_type, activation_params[0], activation_params[1]);
-
     }
 
     return ret;

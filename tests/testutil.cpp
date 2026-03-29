@@ -1630,16 +1630,16 @@ int test_layer_gpu(int typeindex, const ncnn::ParamDict& pd, const std::vector<n
 }
 #endif // NCNN_VULKAN
 
-template <typename T>
+template<typename T>
 void pretty_print(const ncnn::Mat& m)
 {
-    fprintf(stderr,"shape: %d x %d x (%d pack %d)\n", m.w, m.h, m.c, m.elempack);
-    for (int q=0; q<m.c; q++)
+    fprintf(stderr, "shape: %d x %d x (%d pack %d)\n", m.w, m.h, m.c, m.elempack);
+    for (int q = 0; q < m.c; q++)
     {
         const T* ptr = m.channel(q);
-        for (int y=0; y<m.h; y++)
+        for (int y = 0; y < m.h; y++)
         {
-            for (int x=0; x<m.w; x++)
+            for (int x = 0; x < m.w; x++)
             {
                 fprintf(stderr, "%f ", (float)ptr[x]);
             }

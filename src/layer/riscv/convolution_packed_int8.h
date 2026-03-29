@@ -271,10 +271,10 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
             vint32m4_t _sum = __riscv_vmv_v_x_i32m4(0, vlm4);
             const signed char* kptr = weight_data_tm.channel(p / packn + (p % packn) / packn_32);
             int q = 0;
-            for (; q + packn -1 < inch; q += packn)
+            for (; q + packn - 1 < inch; q += packn)
             {
                 const signed char* r0 = bottom_blob.channel(q / elempack).row<const signed char>(i * stride_h) + j * stride_w * elempack;
-                
+
                 for (int k = 0; k < maxk; k++)
                 {
                     const signed char* r0s = r0 + space_ofs[k];
@@ -337,7 +337,6 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
         // fprintf(stderr, "[top_blob] \n");
         // pretty_print<int>(top_blob);
     }
-
 
     remain_outch_start += nn_outch * packn_32;
 #endif // __riscv_vector
