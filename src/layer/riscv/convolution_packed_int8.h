@@ -3,20 +3,22 @@
 
 // Ref: src/layer/arm/convolution_packed_int8.h
 //      src/layer/x86/convolution_packed_int8.h
-template <typename T>
+template<typename T>
 void pretty_print(const ncnn::Mat& m)
 {
-    fprintf(stderr,"shape: %d x %d x (%d pack %d)\n", m.w, m.h, m.c, m.elempack);
-    for (int q=0; q<m.c; q++)
+    fprintf(stderr, "shape: %d x %d x (%d pack %d)\n", m.w, m.h, m.c, m.elempack);
+    for (int q = 0; q < m.c; q++)
     {
-        const T* ptr = m.channel(q);
-        for (int y=0; y<m.h; y++)
+        for (int y = 0; y < m.h; y++)
         {
-            for (int x=0; x<m.w; x++)
+            const T* ptr = m.channel(q).row<T>(y);
+            for (int x = 0; x < m.w; x++)
             {
-                fprintf(stderr, "%f ", (float)ptr[x]);
+                for (int p = 0; p < m.elempack; p++)
+                {
+                    fprintf(stderr, "%f ", (float)ptr[x * m.elempack + p]);
+                }
             }
-            ptr += m.w;
             fprintf(stderr, "\n");
         }
         fprintf(stderr, "------------------------\n");
