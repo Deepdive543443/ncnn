@@ -3,23 +3,20 @@
 
 // Ref: src/layer/arm/convolution_packed_int8.h
 //      src/layer/x86/convolution_packed_int8.h
-template<typename T>
+template <typename T>
 void pretty_print(const ncnn::Mat& m)
 {
-    fprintf(stderr, "shape: w=%d h=%d d=%d ( c=%d x %d)\n", m.w, m.h, m.d, m.c, m.elempack);
-    for (int q = 0; q < m.c * m.elempack; q++)
+    fprintf(stderr,"shape: %d x %d x (%d pack %d)\n", m.w, m.h, m.c, m.elempack);
+    for (int q=0; q<m.c; q++)
     {
-        // const T* ptr = m.channel(q);
-        for (int y = 0; y < m.h; y++)
+        const T* ptr = m.channel(q);
+        for (int y=0; y<m.h; y++)
         {
-            const T* ptr = m.channel(q).row<T>(y);
-            for (int x = 0; x < m.w; x++)
+            for (int x=0; x<m.w; x++)
             {
-                for (int z = 0; z < m.d; z++)
-                {
-                    fprintf(stderr, "%d ", (int)ptr[z + x * m.d]);
-                }
+                fprintf(stderr, "%f ", (float)ptr[x]);
             }
+            ptr += m.w;
             fprintf(stderr, "\n");
         }
         fprintf(stderr, "------------------------\n");
@@ -152,11 +149,6 @@ static void convolution_transform_kernel_packed_int8_rvv(const Mat& kernel, Mat&
             }
         }
     }
-    fprintf(stderr, "[Packing from] \n");
-    pretty_print<const signed char>(kernel);
-    fprintf(stderr, "[Packing to] \n");
-    pretty_print<const signed char>(kernel_tm);
-
     return;
 }
 
@@ -336,12 +328,12 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
                 outptr += 1;
             }
         }
-        fprintf(stderr, "[bottom_blob] \n");
-        pretty_print<const signed char>(bottom_blob);
-        fprintf(stderr, "[weight_data] channels %d \n", p / packn + (p % packn) / packn_32);
-        pretty_print<const signed char>(weight_data_tm.channel(p / packn + (p % packn) / packn_32));
-        fprintf(stderr, "[top_blob] \n");
-        pretty_print<int>(top_blob);
+        // fprintf(stderr, "[bottom_blob] \n");
+        // pretty_print<const signed char>(bottom_blob);
+        // fprintf(stderr, "[weight_data] channels %d \n", p / packn + (p % packn) / packn_32);
+        // pretty_print<const signed char>(weight_data_tm.channel(p / packn + (p % packn) / packn_32));
+        // fprintf(stderr, "[top_blob] \n");
+        // pretty_print<int>(top_blob);
     }
 
 
