@@ -201,7 +201,7 @@ int ShuffleChannel_riscv::forward(const Mat& bottom_blob, Mat& top_blob, const O
             return 0;
         }
         // group too large or shuffle inside elempack
-        if (_group > elempack || (_group > 8 && elempack > 8) || channels % _group != 0)
+        if (_group > elempack || (_group > 8 && elempack > 8) || channels % _group != 0 || _group == 2)
         {
             // convert to pack1
             Mat bottom_blob_unpacked;
@@ -790,7 +790,7 @@ int ShuffleChannel_riscv::forward_bf16s_fp16s(const Mat& bottom_blob, Mat& top_b
             return 0;
         }
         // group too large or shuffle inside elempack
-        if (_group > elempack || (_group > 8 && elempack > 8) || channels % _group != 0)
+        if (_group > elempack || (_group > 8 && elempack > 8) || channels % _group != 0 || _group == 2)
         {
             // convert to pack1
             Mat bottom_blob_unpacked;
