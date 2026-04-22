@@ -35,11 +35,15 @@ if(NCNN_VULKAN)
 endif()
 
 add_executable(ncnnmerge ncnnmerge.cpp)
+add_executable(shuffle shuffle.cpp)
+target_link_libraries(shuffle PRIVATE ncnn)
 
 # add all tools to a virtual project group
 set_property(TARGET ncnn2mem PROPERTY FOLDER "tools")
 set_property(TARGET ncnnoptimize PROPERTY FOLDER "tools")
 set_property(TARGET ncnnmerge PROPERTY FOLDER "tools")
+set_property(TARGET shuffle PROPERTY FOLDER "tools")
 ncnn_install_tool(ncnn2mem)
 ncnn_install_tool(ncnnmerge)
 ncnn_install_tool(ncnnoptimize)
+ncnn_install_tool(shuffle)
