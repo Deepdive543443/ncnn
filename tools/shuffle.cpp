@@ -58,8 +58,8 @@ int main(int argc, char** argv)
         for (int i = 0; i < w * h; i++)
         {
             ptr[i] = static_cast<float>(std::rand() % 100) / 10.0f;
-            
-            // TIP: If you want to visually verify the shuffle easily, 
+
+            // TIP: If you want to visually verify the shuffle easily,
             // uncomment the line below to fill each channel with its index number instead:
             // ptr[i] = static_cast<float>(q);
         }
@@ -69,24 +69,24 @@ int main(int argc, char** argv)
 
     // 2. Create the ShuffleChannel layer directly
     ncnn::Layer* shuffle = ncnn::create_layer("ShuffleChannel");
-    
+
     // 3. Configure the layer parameters
     // In NCNN, parameter index 0 for ShuffleChannel represents the 'group' count.
     ncnn::ParamDict pd;
     int groups = 2; // Split the 4 channels into 2 groups before shuffling
-    pd.set(0, groups); 
+    pd.set(0, groups);
     shuffle->load_param(pd);
 
     // 4. Run the forward pass
     ncnn::Mat out;
     ncnn::Option opt;
-    
+
     // Disable packing and fp16 storage to guarantee standard float32 output
     // This prevents segmentation faults when reading the pointers directly.
     opt.use_fp16_packed = false;
     opt.use_fp16_storage = false;
     opt.use_packing_layout = false;
-    
+
     shuffle->forward(in, out, opt);
 
     // 5. Print the output
