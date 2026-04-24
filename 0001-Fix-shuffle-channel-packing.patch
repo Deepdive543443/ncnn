@@ -1,0 +1,34 @@
+From a3e4580b017799ec41ebf3484b1b3ff7d1dc1cee Mon Sep 17 00:00:00 2001
+From: JustinFung <835776509@qq.com>
+Date: Sat, 18 Apr 2026 16:48:33 +0800
+Subject: [PATCH] Fix shuffle channel packing
+
+---
+ src/layer/riscv/shufflechannel_riscv.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/layer/riscv/shufflechannel_riscv.cpp b/src/layer/riscv/shufflechannel_riscv.cpp
+index ffe15c76..264a3b99 100644
+--- a/src/layer/riscv/shufflechannel_riscv.cpp
++++ b/src/layer/riscv/shufflechannel_riscv.cpp
+@@ -201,7 +201,7 @@ int ShuffleChannel_riscv::forward(const Mat& bottom_blob, Mat& top_blob, const O
+             return 0;
+         }
+         // group too large or shuffle inside elempack
+-        if (_group > elempack || (_group > 8 && elempack > 8) || channels % _group != 0)
++        if (_group > elempack || (_group > 8 && elempack > 8) || channels % _group != 0 || _group == 2)
+         {
+             // convert to pack1
+             Mat bottom_blob_unpacked;
+@@ -790,7 +790,7 @@ int ShuffleChannel_riscv::forward_bf16s_fp16s(const Mat& bottom_blob, Mat& top_b
+             return 0;
+         }
+         // group too large or shuffle inside elempack
+-        if (_group > elempack || (_group > 8 && elempack > 8) || channels % _group != 0)
++        if (_group > elempack || (_group > 8 && elempack > 8) || channels % _group != 0 || _group == 2)
+         {
+             // convert to pack1
+             Mat bottom_blob_unpacked;
+-- 
+2.50.1 (Apple Git-155)
+
