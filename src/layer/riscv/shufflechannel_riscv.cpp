@@ -200,6 +200,61 @@ int ShuffleChannel_riscv::forward(const Mat& bottom_blob, Mat& top_blob, const O
 
             return 0;
         }
+        // specialized _group == 2 && channels % _group == 0 packed path
+        // follow the arm neon version: a simple per-pixel interleave of two
+        // packed channels. the generic `_group <= 4` gather path below builds
+        // its index with viota_m + vslideup_vx(vundefined, ...) + vmerge and
+        // relies on RVV mask-agnostic semantics, which is fragile across
+        // implementations (notably xtheadvector / C906-style cores) and was
+        // observed to produce wrong network outputs.
+        if (_group == 2)
+        {
+            top_blob.create(w, h, channels, elemsize, elempack, opt.blob_allocator);
+            if (top_blob.empty())
+                return -100;
+
+            // build a deterministic interleave index, fully defined at every
+            // lane: [0, packn, 1, packn+1, ..., packn-1, 2*packn-1]
+            size_t vl2 = __riscv_vsetvl_e32m2(packn * 2);
+            vuint32m2_t _seq = __riscv_vid_v_u32m2(vl2);
+            vuint32m2_t _half = __riscv_vsrl_vx_u32m2(_seq, 1, vl2);
+            vuint32m2_t _odd_flag = __riscv_vand_vx_u32m2(_seq, 1, vl2);
+            vuint32m2_t _extra = __riscv_vmul_vx_u32m2(_odd_flag, (uint32_t)packn, vl2);
+            vuint32m2_t _idx2 = __riscv_vadd_vv_u32m2(_half, _extra, vl2);
+
+            const int size = w * h;
+            const size_t vl1 = __riscv_vsetvl_e32m1(packn);
+
+            for (int q = 0; q < channels_per_group; q++)
+            {
+                const float* ptr0 = bottom_blob.channel(q);
+                const float* ptr1 = bottom_blob.channel(q + channels_per_group);
+                float* outptr0 = top_blob.channel(q * 2);
+                float* outptr1 = top_blob.channel(q * 2 + 1);
+
+                for (int i = 0; i < size; i++)
+                {
+                    vfloat32m1_t _p0 = __riscv_vle32_v_f32m1(ptr0, vl1);
+                    vfloat32m1_t _p1 = __riscv_vle32_v_f32m1(ptr1, vl1);
+
+                    vfloat32m2_t _p01 = __riscv_vundefined_f32m2();
+                    _p01 = __riscv_vset_v_f32m1_f32m2(_p01, 0, _p0);
+                    _p01 = __riscv_vset_v_f32m1_f32m2(_p01, 1, _p1);
+
+                    vfloat32m2_t _dst = __riscv_vrgather_vv_f32m2(_p01, _idx2, vl2);
+
+                    __riscv_vse32_v_f32m1(outptr0, __riscv_vget_v_f32m2_f32m1(_dst, 0), vl1);
+                    __riscv_vse32_v_f32m1(outptr1, __riscv_vget_v_f32m2_f32m1(_dst, 1), vl1);
+
+                    ptr0 += packn;
+                    ptr1 += packn;
+                    outptr0 += packn;
+                    outptr1 += packn;
+                }
+            }
+
+            return 0;
+        }
         // group too large or shuffle inside elempack
         if (_group > elempack || (_group > 8 && elempack > 8) || channels % _group != 0)
         {
@@ -784,6 +839,57 @@ int ShuffleChannel_riscv::forward_bf16s_fp16s(const Mat& bottom_blob, Mat& top_b
                     ptr0 += packn;
                     ptr1 += packn;
                     outptr0 += packn;
+                }
+            }
+
+            return 0;
+        }
+        // specialized _group == 2 && channels % _group == 0 packed path
+        // follow the arm neon version: a simple per-pixel interleave of two
+        // packed channels. see the fp32 forward() for the full rationale.
+        if (_group == 2)
+        {
+            top_blob.create(w, h, channels, elemsize, elempack, opt.blob_allocator);
+            if (top_blob.empty())
+                return -100;
+
+            // build a deterministic interleave index, fully defined at every
+            // lane: [0, packn, 1, packn+1, ..., packn-1, 2*packn-1]
+            size_t vl2 = __riscv_vsetvl_e16m2(packn * 2);
+            vuint16m2_t _seq = __riscv_vid_v_u16m2(vl2);
+            vuint16m2_t _half = __riscv_vsrl_vx_u16m2(_seq, 1, vl2);
+            vuint16m2_t _odd_flag = __riscv_vand_vx_u16m2(_seq, 1, vl2);
+            vuint16m2_t _extra = __riscv_vmul_vx_u16m2(_odd_flag, (uint16_t)packn, vl2);
+            vuint16m2_t _idx2 = __riscv_vadd_vv_u16m2(_half, _extra, vl2);
+
+            const int size = w * h;
+            const size_t vl1 = __riscv_vsetvl_e16m1(packn);
+
+            for (int q = 0; q < channels_per_group; q++)
+            {
+                const unsigned short* ptr0 = bottom_blob.channel(q);
+                const unsigned short* ptr1 = bottom_blob.channel(q + channels_per_group);
+                unsigned short* outptr0 = top_blob.channel(q * 2);
+                unsigned short* outptr1 = top_blob.channel(q * 2 + 1);
+
+                for (int i = 0; i < size; i++)
+                {
+                    vuint16m1_t _p0 = __riscv_vle16_v_u16m1(ptr0, vl1);
+                    vuint16m1_t _p1 = __riscv_vle16_v_u16m1(ptr1, vl1);
+
+                    vuint16m2_t _p01 = __riscv_vundefined_u16m2();
+                    _p01 = __riscv_vset_v_u16m1_u16m2(_p01, 0, _p0);
+                    _p01 = __riscv_vset_v_u16m1_u16m2(_p01, 1, _p1);
+
+                    vuint16m2_t _dst = __riscv_vrgather_vv_u16m2(_p01, _idx2, vl2);
+
+                    __riscv_vse16_v_u16m1(outptr0, __riscv_vget_v_u16m2_u16m1(_dst, 0), vl1);
+                    __riscv_vse16_v_u16m1(outptr1, __riscv_vget_v_u16m2_u16m1(_dst, 1), vl1);
+
+                    ptr0 += packn;
+                    ptr1 += packn;
+                    outptr0 += packn;
+                    outptr1 += packn;
                 }
             }
 
