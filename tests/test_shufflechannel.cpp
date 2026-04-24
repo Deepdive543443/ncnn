@@ -45,7 +45,21 @@ static int test_shufflechannel_0()
            || test_shufflechannel(3, 7, 32, 8, 0)
            || test_shufflechannel(5, 7, 48, 2, 0)
            || test_shufflechannel(5, 7, 48, 3, 0)
-           || test_shufflechannel(5, 9, 64, 4, 0);
+           || test_shufflechannel(5, 9, 64, 4, 0)
+           // extra group=2 coverage to exercise the packed path
+           // (various channels_per_group values in the packed Mat,
+           // including odd ones, and sizes that hit packn=4 / packn=8 boundaries)
+           || test_shufflechannel(5, 7, 8, 2, 0)
+           || test_shufflechannel(3, 9, 40, 2, 0)
+           || test_shufflechannel(5, 7, 56, 2, 0)
+           || test_shufflechannel(3, 7, 64, 2, 0)
+           || test_shufflechannel(5, 9, 80, 2, 0)
+           || test_shufflechannel(3, 7, 96, 2, 0)
+           // larger w*h to flush out pointer-advance bugs in the inner loop
+           || test_shufflechannel(17, 11, 16, 2, 0)
+           || test_shufflechannel(17, 11, 32, 2, 0)
+           || test_shufflechannel(19, 13, 48, 2, 0)
+           || test_shufflechannel(17, 11, 64, 2, 0);
 }
 
 static int test_shufflechannel_1()
@@ -71,7 +85,18 @@ static int test_shufflechannel_1()
            || test_shufflechannel(3, 7, 32, 8, 1)
            || test_shufflechannel(5, 7, 48, 2, 1)
            || test_shufflechannel(5, 7, 48, 3, 1)
-           || test_shufflechannel(3, 7, 64, 4, 1);
+           || test_shufflechannel(3, 7, 64, 4, 1)
+           // extra group=2 coverage under reverse=1
+           || test_shufflechannel(5, 7, 8, 2, 1)
+           || test_shufflechannel(3, 9, 40, 2, 1)
+           || test_shufflechannel(5, 7, 56, 2, 1)
+           || test_shufflechannel(3, 7, 64, 2, 1)
+           || test_shufflechannel(5, 9, 80, 2, 1)
+           || test_shufflechannel(3, 7, 96, 2, 1)
+           || test_shufflechannel(17, 11, 16, 2, 1)
+           || test_shufflechannel(17, 11, 32, 2, 1)
+           || test_shufflechannel(19, 13, 48, 2, 1)
+           || test_shufflechannel(17, 11, 64, 2, 1);
 }
 
 int main()
