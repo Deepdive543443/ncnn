@@ -12,6 +12,18 @@ macro(ncnn_add_example name)
     set_property(TARGET ${name} PROPERTY FOLDER "examples")
 endmacro()
 
+# standalone example that does not require OpenCV or NCNN_PIXEL
+macro(ncnn_add_standalone_example name)
+    add_executable(${name} ${name}.cpp)
+    target_include_directories(${name} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
+        ${CMAKE_CURRENT_BINARY_DIR}/../src)
+    target_link_libraries(${name} PRIVATE ncnn)
+    set_property(TARGET ${name} PROPERTY FOLDER "examples")
+endmacro()
+
+ncnn_add_standalone_example(shufflechannel_demo)
+
 if(NCNN_PIXEL)
     if(NOT NCNN_SIMPLEOCV)
         find_package(OpenCV QUIET COMPONENTS opencv_world)
