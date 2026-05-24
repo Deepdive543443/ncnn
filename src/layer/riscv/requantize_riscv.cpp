@@ -185,7 +185,7 @@ static void requantize_packnto1(const int* ptr, signed char* s8ptr, const Mat& s
             _vf = __riscv_vfmul_vv_f32m8(_vf, _scale_in, vl);
             _vf = activation_ps(_vf, activation_type, activation_params, vl);
             _vf = __riscv_vfmul_vv_f32m8(_vf, _scale_out, vl);
-            __riscv_vse8_v_i8m2(s8ptr, float2int8(_vf, vl), vl);
+            __riscv_vse8_v_i8m2(tmp, float2int8(_vf, vl), vl);
             for (size_t j = 0; j < (vl / vlm1); j++)
             {
                 for (int i = 0; i < vlm1; i++)
@@ -216,7 +216,7 @@ static void requantize_packnto1(const int* ptr, signed char* s8ptr, const Mat& s
             _vf = __riscv_vfmadd_vv_f32m8(_vf, _scale_in, _bias, vl);
             _vf = activation_ps(_vf, activation_type, activation_params, vl);
             _vf = __riscv_vfmul_vv_f32m8(_vf, _scale_out, vl);
-            __riscv_vse8_v_i8m2(s8ptr, float2int8(_vf, vl), vl);
+            __riscv_vse8_v_i8m2(tmp, float2int8(_vf, vl), vl);
             for (size_t j = 0; j < (vl / vlm1); j++)
             {
                 for (int i = 0; i < vlm1; i++)
