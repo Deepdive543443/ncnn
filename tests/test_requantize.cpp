@@ -298,8 +298,13 @@ static int test_requantize_4()
            || test_requantize_pack1(RandomIntMat(5, 3, 2, 12), 12, 12, 0)
            || test_requantize_pack1(RandomIntMat(3, 5, 3, 13), 1, 13, 13)
            || test_requantize_pack1(RandomIntMat(3, 5, 3, 13), 13, 1, 0)
+#ifndef __riscv
            || test_requantize_pack8(RandomIntMat(5, 3, 2, 24), 1, 1, 24)
-           || test_requantize_pack8(RandomIntMat(5, 3, 2, 24), 24, 24, 0);
+           || test_requantize_pack8(RandomIntMat(5, 3, 2, 24), 24, 24, 0)
+#else
+           || test_requantize(RandomIntMat(5, 3, 2, 24), 1, 1, 24)
+           || test_requantize(RandomIntMat(5, 3, 2, 24), 24, 24, 0);
+#endif
 }
 
 int main()
