@@ -650,7 +650,7 @@ int Convolution_riscv::forward_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
         if (use_int8_requantize)
         {
             out_elempack = num_output % packn == 0 ? packn : 1;
-            out_elempack_int32 = num_output % packn == 0 ? packn : 1;
+            out_elempack_int32 = num_output % packn_32 == 0 ? packn_32 : 1;
         }
         else
         {
