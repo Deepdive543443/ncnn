@@ -19,6 +19,139 @@ Requantize_riscv::Requantize_riscv()
 #endif // __riscv_vector
 }
 
+#if __riscv_vector
+static void requantize_packnton_s8(const int* ptr0, const int* ptr1, const int* ptr2, const int* ptr3, signed char* s8ptr, const Mat& scale_in_data, const Mat& bias_data, const Mat& scale_out_data, int activation_type, const Mat& activation_params, int elemcount)
+{
+    // For VLEN256: int32x8 -> int8x32
+    // For VLEN128: int32x4 -> int8x16
+
+    const size_t vlm8 = __riscv_vsetvlmax_e32m8();
+    const size_t vlm4 = __riscv_vsetvlmax_e32m4();
+    const size_t vlm1 = __riscv_vsetvlmax_e32m1();
+
+    float scale_in = scale_in_data[0];
+    float scale_out = scale_out_data[0];
+
+    vfloat32m4_t _scale_in0 = __riscv_vfmv_v_f_f32m4(scale_in, vlm4);
+    if (scale_in_data.w > 1)
+    {
+        _scale_in0 = __riscv_vle32_v_f32m4(scale_in_data, vlm4);
+    }
+
+    vfloat32m4_t _scale_out0 = __riscv_vfmv_v_f_f32m4(scale_out, vlm4);
+    if (scale_out_data.w > 1)
+    {
+        _scale_out0 = __riscv_vle32_v_f32m4(scale_out_data, vlm4);
+    }
+
+    vfloat32m8_t _scale_in = __riscv_vcreate_v_f32m4_f32m8(_scale_in0, _scale_in0);
+    vfloat32m8_t _scale_out = __riscv_vcreate_v_f32m4_f32m8(_scale_out0, _scale_out0);
+
+    if (bias_data.w == 0)
+    {
+        int i = 0;
+        for (; i + 1 < elemcount; i += 2)
+        {
+            vint32m1_t _v0 = __riscv_vle32_v_i32m1(ptr0, vlm1);
+            vint32m1_t _v1 = __riscv_vle32_v_i32m1(ptr1, vlm1);
+            vint32m1_t _v2 = __riscv_vle32_v_i32m1(ptr2, vlm1);
+            vint32m1_t _v3 = __riscv_vle32_v_i32m1(ptr3, vlm1);
+            vint32m1_t _v4 = __riscv_vle32_v_i32m1(ptr0 + vlm1, vlm1);
+            vint32m1_t _v5 = __riscv_vle32_v_i32m1(ptr1 + vlm1, vlm1);
+            vint32m1_t _v6 = __riscv_vle32_v_i32m1(ptr2 + vlm1, vlm1);
+            vint32m1_t _v7 = __riscv_vle32_v_i32m1(ptr3 + vlm1, vlm1);
+            vint32m8_t _vi = __riscv_vcreate_v_i32m1_i32m8(_v0, _v1, _v2, _v3, _v4, _v5, _v6, _v7);
+            vfloat32m8_t _vf = __riscv_vfcvt_f_x_v_f32m8(_vi, vlm8);
+            _vf = __riscv_vfmul_vv_f32m8(_vf, _scale_in, vlm8);
+            _vf = activation_ps(_vf, activation_type, activation_params, vlm8);
+            _vf = __riscv_vfmul_vv_f32m8(_vf, _scale_out, vlm8);
+            __riscv_vse8_v_i8m2(s8ptr, float2int8(_vf, vlm8), vlm8);
+
+            ptr0 += vlm1 * 2;
+            ptr1 += vlm1 * 2;
+            ptr2 += vlm1 * 2;
+            ptr3 += vlm1 * 2;
+            s8ptr += vlm8;
+        }
+
+        for (; i < elemcount; i++)
+        {
+            vint32m1_t _v0 = __riscv_vle32_v_i32m1(ptr0, vlm1);
+            vint32m1_t _v1 = __riscv_vle32_v_i32m1(ptr1, vlm1);
+            vint32m1_t _v2 = __riscv_vle32_v_i32m1(ptr2, vlm1);
+            vint32m1_t _v3 = __riscv_vle32_v_i32m1(ptr3, vlm1);
+            vint32m4_t _vi = __riscv_vcreate_v_i32m1_i32m4(_v0, _v1, _v2, _v3);
+            vfloat32m4_t _vf = __riscv_vfcvt_f_x_v_f32m4(_vi, vlm4);
+            _vf = __riscv_vfmul_vv_f32m4(_vf, _scale_in0, vlm4);
+            _vf = activation_ps(_vf, activation_type, activation_params, vlm4);
+            _vf = __riscv_vfmul_vv_f32m4(_vf, _scale_out0, vlm4);
+            __riscv_vse8_v_i8m1(s8ptr, float2int8(_vf, vlm4), vlm4);
+
+            ptr0 += vlm1;
+            ptr1 += vlm1;
+            ptr2 += vlm1;
+            ptr3 += vlm1;
+            s8ptr += vlm4;
+        }
+    }
+    else
+    {
+        float bias = bias_data[0];
+        vfloat32m4_t _bias0 = __riscv_vfmv_v_f_f32m4(bias, vlm4);
+        if (bias_data.w > 1)
+        {
+            _bias0 = __riscv_vle32_v_f32m4(bias_data, vlm4);
+        }
+        vfloat32m8_t _bias = __riscv_vcreate_v_f32m4_f32m8(_bias0, _bias0);
+
+        int i = 0;
+        for (; i + 1 < elemcount; i += 2)
+        {
+            vint32m1_t _v0 = __riscv_vle32_v_i32m1(ptr0, vlm1);
+            vint32m1_t _v1 = __riscv_vle32_v_i32m1(ptr1, vlm1);
+            vint32m1_t _v2 = __riscv_vle32_v_i32m1(ptr2, vlm1);
+            vint32m1_t _v3 = __riscv_vle32_v_i32m1(ptr3, vlm1);
+            vint32m1_t _v4 = __riscv_vle32_v_i32m1(ptr0 + vlm1, vlm1);
+            vint32m1_t _v5 = __riscv_vle32_v_i32m1(ptr1 + vlm1, vlm1);
+            vint32m1_t _v6 = __riscv_vle32_v_i32m1(ptr2 + vlm1, vlm1);
+            vint32m1_t _v7 = __riscv_vle32_v_i32m1(ptr3 + vlm1, vlm1);
+            vint32m8_t _vi = __riscv_vcreate_v_i32m1_i32m8(_v0, _v1, _v2, _v3, _v4, _v5, _v6, _v7);
+            vfloat32m8_t _vf = __riscv_vfcvt_f_x_v_f32m8(_vi, vlm8);
+            _vf = __riscv_vfmadd_vv_f32m8(_vf, _scale_in, _bias, vlm8);
+            _vf = activation_ps(_vf, activation_type, activation_params, vlm8);
+            _vf = __riscv_vfmul_vv_f32m8(_vf, _scale_out, vlm8);
+            __riscv_vse8_v_i8m2(s8ptr, float2int8(_vf, vlm8), vlm8);
+
+            ptr0 += vlm1 * 2;
+            ptr1 += vlm1 * 2;
+            ptr2 += vlm1 * 2;
+            ptr3 += vlm1 * 2;
+            s8ptr += vlm8;
+        }
+
+        for (; i < elemcount; i++)
+        {
+            vint32m1_t _v0 = __riscv_vle32_v_i32m1(ptr0, vlm1);
+            vint32m1_t _v1 = __riscv_vle32_v_i32m1(ptr1, vlm1);
+            vint32m1_t _v2 = __riscv_vle32_v_i32m1(ptr2, vlm1);
+            vint32m1_t _v3 = __riscv_vle32_v_i32m1(ptr3, vlm1);
+            vint32m4_t _vi = __riscv_vcreate_v_i32m1_i32m4(_v0, _v1, _v2, _v3);
+            vfloat32m4_t _vf = __riscv_vfcvt_f_x_v_f32m4(_vi, vlm4);
+            _vf = __riscv_vfmadd_vv_f32m4(_vf, _scale_in0, _bias0, vlm4);
+            _vf = activation_ps(_vf, activation_type, activation_params, vlm4);
+            _vf = __riscv_vfmul_vv_f32m4(_vf, _scale_out0, vlm4);
+            __riscv_vse8_v_i8m1(s8ptr, float2int8(_vf, vlm4), vlm4);
+
+            ptr0 += vlm1;
+            ptr1 += vlm1;
+            ptr2 += vlm1;
+            ptr3 += vlm1;
+            s8ptr += vlm4;
+        }
+    }
+}
+#endif // __riscv_vector
+
 static void requantize_relu(const int* intptr, signed char* ptr, const Mat& scale_in_data, const Mat& bias_data, const Mat& scale_out_data, int elemcount, int elempack)
 {
     const int bias_data_size = bias_data.w;
@@ -418,6 +551,20 @@ int Requantize_riscv::forward(const Mat& bottom_blob, Mat& top_blob, const Optio
 #if __riscv_vector
         if (elempack == packn && out_elempack == packn_s8)
         {
+            for (int i = 0; i < outh; i++)
+            {
+                const int* ptr0 = bottom_blob.row<int>(i * 4);
+                const int* ptr1 = bottom_blob.row<int>(i * 4 + 1);
+                const int* ptr2 = bottom_blob.row<int>(i * 4 + 2);
+                const int* ptr3 = bottom_blob.row<int>(i * 4 + 3);
+                signed char* s8ptr = top_blob.row<signed char>(i);
+
+                const Mat scale_in_data_i = scale_in_data_size > 1 ? scale_in_data.range(i * out_elempack, out_elempack) : scale_in_data;
+                const Mat bias_data_i = bias_data_size > 1 ? bias_data.range(i * out_elempack, out_elempack) : bias_data;
+                const Mat scale_out_data_i = scale_out_data_size > 1 ? scale_out_data.range(i * out_elempack, out_elempack) : scale_out_data;
+
+                requantize_packnton_s8(ptr0, ptr1, ptr2, ptr3, s8ptr, scale_in_data_i, bias_data_i, scale_out_data_i, activation_type, activation_params, w);
+            }
         }
 
         if (elempack == packn && out_elempack == 1)
@@ -463,6 +610,20 @@ int Requantize_riscv::forward(const Mat& bottom_blob, Mat& top_blob, const Optio
 #if __riscv_vector
         if (elempack == packn && out_elempack == packn_s8)
         {
+            for (int q = 0; q < outc; q++)
+            {
+                const int* ptr0 = bottom_blob.row<int>(q * 4);
+                const int* ptr1 = bottom_blob.row<int>(q * 4 + 1);
+                const int* ptr2 = bottom_blob.row<int>(q * 4 + 2);
+                const int* ptr3 = bottom_blob.row<int>(q * 4 + 3);
+                signed char* s8ptr = top_blob.row<signed char>(q);
+
+                const Mat scale_in_data_q = scale_in_data_size > 1 ? scale_in_data.range(q * out_elempack, out_elempack) : scale_in_data;
+                const Mat bias_data_q = bias_data_size > 1 ? bias_data.range(q * out_elempack, out_elempack) : bias_data;
+                const Mat scale_out_data_q = scale_out_data_size > 1 ? scale_out_data.range(q * out_elempack, out_elempack) : scale_out_data;
+
+                requantize_packnton_s8(ptr0, ptr1, ptr2, ptr3, s8ptr, scale_in_data_q, bias_data_q, scale_out_data_q, activation_type, activation_params, w * h * d);
+            }
         }
 
         if (elempack == packn && out_elempack == 1)
