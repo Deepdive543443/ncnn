@@ -150,6 +150,87 @@ static void requantize_packnton_s8(const int* ptr0, const int* ptr1, const int* 
         }
     }
 }
+
+static void requantize_packnto1(const int* ptr, signed char* s8ptr, const Mat& scale_in_data, const Mat& bias_data, const Mat& scale_out_data, int activation_type, const Mat& activation_params, int elemcount, int stride)
+{
+    const size_t vlm8 = __riscv_vsetvlmax_e32m8();
+    const size_t vlm1 = __riscv_vsetvlmax_e32m1();
+
+    float scale_in = scale_in_data[0];
+    float scale_out = scale_out_data[0];
+
+    vfloat32m8_t _scale_in = __riscv_vfmv_v_f_f32m8(scale_in, vlm8);
+    if (scale_in_data.w > 1)
+    {
+        vfloat32m1_t _s = __riscv_vle32_v_f32m1(scale_in_data, vlm1);
+        _scale_in = __riscv_vcreate_v_f32m1_f32m8(_s, _s, _s, _s, _s, _s, _s, _s);
+    }
+
+    vfloat32m8_t _scale_out = __riscv_vfmv_v_f_f32m8(scale_out, vlm8);
+    if (scale_out_data.w > 1)
+    {
+        vfloat32m1_t _s = __riscv_vle32_v_f32m1(scale_out_data, vlm1);
+        _scale_out = __riscv_vcreate_v_f32m1_f32m8(_s, _s, _s, _s, _s, _s, _s, _s);
+    }
+
+    signed char tmp[vlm8];
+    int n = elemcount * vlm1;
+
+    if (bias_data.w == 0)
+    {
+        while (n > 0)
+        {
+            size_t vl = __riscv_vsetvl_e32m8(n);
+            vfloat32m8_t _vf = __riscv_vfcvt_f_x_v_f32m8(__riscv_vle32_v_i32m8(ptr, vl), vl);
+            _vf = __riscv_vfmul_vv_f32m8(_vf, _scale_in, vl);
+            _vf = activation_ps(_vf, activation_type, activation_params, vl);
+            _vf = __riscv_vfmul_vv_f32m8(_vf, _scale_out, vl);
+            __riscv_vse8_v_i8m2(s8ptr, float2int8(_vf, vl), vl);
+            for (size_t j = 0; j < (vl / vlm1); j++)
+            {
+                for (int i = 0; i < vlm1; i++)
+                {
+                    s8ptr[i * stride] = tmp[j * vlm1 + i];
+                }
+                s8ptr++;
+            }
+
+            ptr += vl;
+            n -= vl;
+        }
+    }
+    else
+    {
+        float bias = bias_data[0];
+        vfloat32m8_t _bias = __riscv_vfmv_v_f_f32m8(bias, vlm8);
+        if (bias_data.w > 1)
+        {
+            vfloat32m1_t _s = __riscv_vle32_v_f32m1(bias_data, vlm1);
+            _bias = __riscv_vcreate_v_f32m1_f32m8(_s, _s, _s, _s, _s, _s, _s, _s);
+        }
+
+        while (n > 0)
+        {
+            size_t vl = __riscv_vsetvl_e32m8(n);
+            vfloat32m8_t _vf = __riscv_vfcvt_f_x_v_f32m8(__riscv_vle32_v_i32m8(ptr, vl), vl);
+            _vf = __riscv_vfmadd_vv_f32m8(_vf, _scale_in, _bias, vl);
+            _vf = activation_ps(_vf, activation_type, activation_params, vl);
+            _vf = __riscv_vfmul_vv_f32m8(_vf, _scale_out, vl);
+            __riscv_vse8_v_i8m2(s8ptr, float2int8(_vf, vl), vl);
+            for (size_t j = 0; j < (vl / vlm1); j++)
+            {
+                for (int i = 0; i < vlm1; i++)
+                {
+                    s8ptr[i * stride] = tmp[j * vlm1 + i];
+                }
+                s8ptr++;
+            }
+
+            ptr += vl;
+            n -= vl;
+        }
+    }
+}
 #endif // __riscv_vector
 
 static void requantize_relu(const int* intptr, signed char* ptr, const Mat& scale_in_data, const Mat& bias_data, const Mat& scale_out_data, int elemcount, int elempack)
@@ -569,6 +650,18 @@ int Requantize_riscv::forward(const Mat& bottom_blob, Mat& top_blob, const Optio
 
         if (elempack == packn && out_elempack == 1)
         {
+            #pragma omp parallel for num_threads(opt.num_threads)
+            for (int i = 0; i < h; i++)
+            {
+                const int* ptr = bottom_blob.row<int>(i);
+                signed char* s8ptr = top_blob.row<signed char>(i * packn);
+
+                const Mat scale_in_data_i = scale_in_data_size > 1 ? scale_in_data.range(i * elempack, elempack) : scale_in_data;
+                const Mat bias_data_i = bias_data_size > 1 ? bias_data.range(i * elempack, elempack) : bias_data;
+                const Mat scale_out_data_i = scale_out_data_size > 1 ? scale_out_data.range(i * elempack, elempack) : scale_out_data;
+
+                requantize_packnto1(ptr, s8ptr, scale_in_data_i, bias_data_i, scale_out_data_i, activation_type, activation_params, w, w);
+            }
         }
 #endif // __riscv_vector
         if (elempack == 1 && out_elempack == 1)
@@ -612,11 +705,11 @@ int Requantize_riscv::forward(const Mat& bottom_blob, Mat& top_blob, const Optio
         {
             for (int q = 0; q < outc; q++)
             {
-                const int* ptr0 = bottom_blob.row<int>(q * 4);
-                const int* ptr1 = bottom_blob.row<int>(q * 4 + 1);
-                const int* ptr2 = bottom_blob.row<int>(q * 4 + 2);
-                const int* ptr3 = bottom_blob.row<int>(q * 4 + 3);
-                signed char* s8ptr = top_blob.row<signed char>(q);
+                const int* ptr0 = bottom_blob.channel(q * 4);
+                const int* ptr1 = bottom_blob.channel(q * 4 + 1);
+                const int* ptr2 = bottom_blob.channel(q * 4 + 2);
+                const int* ptr3 = bottom_blob.channel(q * 4 + 3);
+                signed char* s8ptr = top_blob.channel(q);
 
                 const Mat scale_in_data_q = scale_in_data_size > 1 ? scale_in_data.range(q * out_elempack, out_elempack) : scale_in_data;
                 const Mat bias_data_q = bias_data_size > 1 ? bias_data.range(q * out_elempack, out_elempack) : bias_data;
@@ -628,6 +721,18 @@ int Requantize_riscv::forward(const Mat& bottom_blob, Mat& top_blob, const Optio
 
         if (elempack == packn && out_elempack == 1)
         {
+            #pragma omp parallel for num_threads(opt.num_threads)
+            for (int q = 0; q < channels; q++)
+            {
+                const int* ptr = bottom_blob.channel(q);
+                signed char* s8ptr = top_blob.channel(q * packn);
+
+                const Mat scale_in_data_q = scale_in_data_size > 1 ? scale_in_data.range(q * elempack, elempack) : scale_in_data;
+                const Mat bias_data_q = bias_data_size > 1 ? bias_data.range(q * elempack, elempack) : bias_data;
+                const Mat scale_out_data_q = scale_out_data_size > 1 ? scale_out_data.range(q * elempack, elempack) : scale_out_data;
+
+                requantize_packnto1(ptr, s8ptr, scale_in_data_q, bias_data_q, scale_out_data_q, activation_type, activation_params, w * h * d, top_blob.cstep);
+            }
         }
 #endif // __riscv_vector
         if (elempack == 1 && out_elempack == 1)
