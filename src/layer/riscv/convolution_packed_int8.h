@@ -174,7 +174,7 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
     const size_t packn = csrr_vlenb() / 4;
 
     nn_outch = (outch - remain_outch_start) / packn_s8;
-    // #pragma omp parallel for num_threads(opt.num_threads)
+    #pragma omp parallel for num_threads(opt.num_threads)
     for (int pp = 0; pp < nn_outch; pp++)
     {
         const size_t vlm1 = __riscv_vsetvlmax_e8m1();
@@ -266,7 +266,7 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
 
     remain_outch_start += nn_outch * packn_s8;
     nn_outch = (outch - remain_outch_start) / packn;
-    // #pragma omp parallel for num_threads(opt.num_threads)
+    #pragma omp parallel for num_threads(opt.num_threads)
     for (int pp = 0; pp < nn_outch; pp++)
     {
         const size_t vlm1 = __riscv_vsetvl_e8m1(packn);
@@ -351,7 +351,7 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
 
     remain_outch_start += nn_outch * packn;
 #endif // __riscv_vector
-    // #pragma omp parallel for num_threads(opt.num_threads)
+    #pragma omp parallel for num_threads(opt.num_threads)
     for (int p = remain_outch_start; p < outch; p++)
     {
 #if __riscv_vector
