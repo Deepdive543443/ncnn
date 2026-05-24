@@ -358,9 +358,28 @@ int Requantize_riscv::forward(const Mat& bottom_blob, Mat& top_blob, const Optio
     const int elempack = bottom_blob.elempack;
     const size_t out_elemsize = elempack * 1u;
 
+#if __riscv_vector
+    const int packn = csrr_vlenb() / 4;
+    const int packn_s8 = csrr_vlenb();
+#endif
+
     if (dims == 1)
     {
-        top_blob.create(w, out_elemsize, elempack, opt.blob_allocator);
+        int out_elempack = 1;
+#if __riscv_vector
+        if (opt.use_packing_layout)
+        {
+            out_elempack = w * elempack % packn_s8 == 0 ? packn_s8 : 1;
+        }
+#endif
+        // int32 -> int8
+        // VLEN128: 4x32 or 16x8
+        // VLEN256: 8x32 or 32x8
+
+        const int outw = w * elempack / out_elempack;
+        const size_t out_elemsize = out_elempack * 1u;
+
+        top_blob.create(outw, out_elemsize, out_elempack, opt.blob_allocator);
         if (top_blob.empty())
             return -100;
 
@@ -382,44 +401,88 @@ int Requantize_riscv::forward(const Mat& bottom_blob, Mat& top_blob, const Optio
 
     if (dims == 2)
     {
-        top_blob.create(w, h, out_elemsize, elempack, opt.blob_allocator);
+        int out_elempack = 1;
+#if __riscv_vector
+        // Refreshing note: Elements was packed on Channel dimension
+        if (opt.use_packing_layout)
+        {
+            out_elempack = h * elempack % packn_s8 == 0 ? packn_s8 : 1;
+        }
+#endif // __riscv_vector
+        const int outh = h * elempack / out_elempack;
+        const size_t out_elemsize = out_elempack * 1u;
+
+        top_blob.create(w, outh, out_elemsize, out_elempack, opt.blob_allocator);
         if (top_blob.empty())
             return -100;
-
-        #pragma omp parallel for num_threads(opt.num_threads)
-        for (int i = 0; i < h; i++)
+#if __riscv_vector
+        if (elempack == packn && out_elempack == packn_s8)
         {
-            const int* intptr = bottom_blob.row<const int>(i);
-            signed char* ptr = top_blob.row<signed char>(i);
+        }
 
-            const Mat scale_in_data_i = scale_in_data_size > 1 ? scale_in_data.range(i * elempack, elempack) : scale_in_data;
-            const Mat bias_data_i = bias_data_size > 1 ? bias_data.range(i * elempack, elempack) : bias_data;
-            const Mat scale_out_data_i = scale_out_data_size > 1 ? scale_out_data.range(i * elempack, elempack) : scale_out_data;
+        if (elempack == packn && out_elempack == 1)
+        {
+        }
+#endif // __riscv_vector
+        if (elempack == 1 && out_elempack == 1)
+        {
+            #pragma omp parallel for num_threads(opt.num_threads)
+            for (int i = 0; i < h; i++)
+            {
+                const int* intptr = bottom_blob.row<const int>(i);
+                signed char* ptr = top_blob.row<signed char>(i);
 
-            requantize(intptr, ptr, scale_in_data_i, bias_data_i, scale_out_data_i, activation_type, activation_params, w, elempack);
+                const Mat scale_in_data_i = scale_in_data_size > 1 ? scale_in_data.range(i * elempack, elempack) : scale_in_data;
+                const Mat bias_data_i = bias_data_size > 1 ? bias_data.range(i * elempack, elempack) : bias_data;
+                const Mat scale_out_data_i = scale_out_data_size > 1 ? scale_out_data.range(i * elempack, elempack) : scale_out_data;
+
+                requantize(intptr, ptr, scale_in_data_i, bias_data_i, scale_out_data_i, activation_type, activation_params, w, elempack);
+            }
         }
     }
 
     if (dims == 3 || dims == 4)
     {
+        int out_elempack = 1;
+#if __riscv_vector
+        if (opt.use_packing_layout)
+        {
+            out_elempack = channels * elempack % packn_s8 == 0 ? packn_s8 : 1;
+        }
+#endif
+        const int outc = channels * elempack / out_elempack;
+        const size_t out_elemsize = out_elempack * 1u;
+
         if (dims == 3)
-            top_blob.create(w, h, channels, out_elemsize, elempack, opt.blob_allocator);
+            top_blob.create(w, h, outc, out_elemsize, out_elempack, opt.blob_allocator);
         else
-            top_blob.create(w, h, d, channels, out_elemsize, elempack, opt.blob_allocator);
+            top_blob.create(w, h, d, outc, out_elemsize, out_elempack, opt.blob_allocator);
         if (top_blob.empty())
             return -100;
 
-        #pragma omp parallel for num_threads(opt.num_threads)
-        for (int q = 0; q < channels; q++)
+#if __riscv_vector
+        if (elempack == packn && out_elempack == packn_s8)
         {
-            const int* intptr = bottom_blob.channel(q);
-            signed char* ptr = top_blob.channel(q);
+        }
 
-            const Mat scale_in_data_q = scale_in_data_size > 1 ? scale_in_data.range(q * elempack, elempack) : scale_in_data;
-            const Mat bias_data_q = bias_data_size > 1 ? bias_data.range(q * elempack, elempack) : bias_data;
-            const Mat scale_out_data_q = scale_out_data_size > 1 ? scale_out_data.range(q * elempack, elempack) : scale_out_data;
+        if (elempack == packn && out_elempack == 1)
+        {
+        }
+#endif // __riscv_vector
+        if (elempack == 1 && out_elempack == 1)
+        {
+            #pragma omp parallel for num_threads(opt.num_threads)
+            for (int q = 0; q < channels; q++)
+            {
+                const int* intptr = bottom_blob.channel(q);
+                signed char* ptr = top_blob.channel(q);
 
-            requantize(intptr, ptr, scale_in_data_q, bias_data_q, scale_out_data_q, activation_type, activation_params, w * h * d, elempack);
+                const Mat scale_in_data_q = scale_in_data_size > 1 ? scale_in_data.range(q * elempack, elempack) : scale_in_data;
+                const Mat bias_data_q = bias_data_size > 1 ? bias_data.range(q * elempack, elempack) : bias_data;
+                const Mat scale_out_data_q = scale_out_data_size > 1 ? scale_out_data.range(q * elempack, elempack) : scale_out_data;
+
+                requantize(intptr, ptr, scale_in_data_q, bias_data_q, scale_out_data_q, activation_type, activation_params, w * h * d, elempack);
+            }
         }
     }
 
