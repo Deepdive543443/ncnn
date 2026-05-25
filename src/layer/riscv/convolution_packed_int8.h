@@ -239,12 +239,6 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
                 }
             }
 
-            if (out_elempack == packn_s8)
-            {
-                __riscv_vse32_v_i32m4(outptr, _sum, vlm1);
-                outptr += packn_s8;
-            }
-
             if (out_elempack == packn)
             {
                 __riscv_vse32_v_i32m1(outptr, __riscv_vget_v_i32m4_i32m1(_sum, 0), __riscv_vsetvlmax_e32m1());
