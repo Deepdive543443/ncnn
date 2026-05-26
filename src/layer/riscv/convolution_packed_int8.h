@@ -26,8 +26,8 @@ static void convolution_transform_kernel_packed_int8_rvv(const Mat& kernel, Mat&
     }
     else if (outch >= packn)
     {
-        if (inch >= packn)
-            kernel_tm.create(maxk, inch / packn + inch % packn, outch / packn + outch % packn, (size_t)(packn * packn), packn * packn);
+        if (inch >= packn_s8)
+            kernel_tm.create(maxk, inch / packn_s8 + inch % packn_s8, outch / packn + outch % packn, (size_t)(packn_s8 * packn), packn_s8 * packn);
         else
             kernel_tm.create(maxk, inch, outch / packn + outch % packn, (size_t)packn, packn);
     }
