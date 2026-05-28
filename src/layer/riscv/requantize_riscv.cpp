@@ -205,8 +205,8 @@ static void requantize_packnto1(const int* ptr, signed char* s8ptr, const Mat& s
         vfloat32m8_t _bias = __riscv_vfmv_v_f_f32m8(bias, vlm8);
         if (bias_data.w > 1)
         {
-            vfloat32m1_t _s = __riscv_vle32_v_f32m1(bias_data, vlm1);
-            _bias = __riscv_vcreate_v_f32m1_f32m8(_s, _s, _s, _s, _s, _s, _s, _s);
+            vfloat32m1_t _b = __riscv_vle32_v_f32m1(bias_data, vlm1);
+            _bias = __riscv_vcreate_v_f32m1_f32m8(_b, _b, _b, _b, _b, _b, _b, _b);
         }
 
         while (n > 0)
