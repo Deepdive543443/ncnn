@@ -170,6 +170,7 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
     int nn_outch = 0;
     int remain_outch_start = 0;
 #if __riscv_vector
+    const size_t vlm1 = __riscv_vsetvlmax_e8m1();
     const size_t packn_s8 = csrr_vlenb();
     const size_t packn = csrr_vlenb() / 4;
 
@@ -261,7 +262,7 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
     #pragma omp parallel for num_threads(opt.num_threads)
     for (int pp = 0; pp < nn_outch; pp++)
     {
-        const size_t vlm1 = __riscv_vsetvl_e8m1(packn);
+        const size_t vl = __riscv_vsetvl_e8m1(packn);
         const int p = remain_outch_start + pp * packn;
         int* outptr = top_blob.channel(p / out_elempack);
 
@@ -271,7 +272,7 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
             const int i = ij / outw;
             const int j = ij % outw;
 
-            vint32m4_t _sum = __riscv_vmv_v_x_i32m4(0, vlm1);
+            vint32m4_t _sum = __riscv_vmv_v_x_i32m4(0, vl);
             const signed char* kptr = weight_data_tm.channel(p / packn_s8 + (p % packn_s8) / packn);
             int q = 0;
             for (; q + packn_s8 - 1 < inch; q += packn_s8)
@@ -285,9 +286,9 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
                         for (int k = 0; k < maxk; k++)
                         {
                             const signed char* r0s = r0 + space_ofs[k];
-                            vint8m1_t _w = __riscv_vle8_v_i8m1(kptr, vlm1);
-                            vint16m2_t _s = __riscv_vwmul_vx_i16m2(_w, r0s[z], vlm1);
-                            _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm1);
+                            vint8m1_t _w = __riscv_vle8_v_i8m1(kptr, vl);
+                            vint16m2_t _s = __riscv_vwmul_vx_i16m2(_w, r0s[z], vl);
+                            _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vl);
 
                             kptr += packn;
                         }
@@ -300,11 +301,11 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
                         for (int k = 0; k < maxk; k++)
                         {
                             const signed char* r0s = r0 + space_ofs[k];
-                            vint8m1_t _w = __riscv_vle8_v_i8m1(kptr, vlm1);
-                            vint16m2_t _s = __riscv_vwmul_vx_i16m2(_w, r0s[z * N], vlm1);
-                            _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm1);
+                            vint8m1_t _w = __riscv_vle8_v_i8m1(kptr, vl);
+                            vint16m2_t _s = __riscv_vwmul_vx_i16m2(_w, r0s[z * N], vl);
+                            _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vl);
 
-                            kptr += packn;
+                            kptr += vl;
                         }
                     }
                 }
@@ -317,23 +318,23 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
                 for (int k = 0; k < maxk; k++)
                 {
                     const signed char* r0s = r0 + space_ofs[k];
-                    vint8m1_t _w = __riscv_vle8_v_i8m1(kptr, vlm1);
-                    vint16m2_t _s = __riscv_vwmul_vx_i16m2(_w, r0s[0], vlm1);
-                    _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm1);
+                    vint8m1_t _w = __riscv_vle8_v_i8m1(kptr, vl);
+                    vint16m2_t _s = __riscv_vwmul_vx_i16m2(_w, r0s[0], vl);
+                    _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vl);
 
-                    kptr += packn;
+                    kptr += vl;
                 }
             }
 
             if (out_elempack == packn)
             {
-                __riscv_vse32_v_i32m1(outptr, __riscv_vget_v_i32m4_i32m1(_sum, 0), vlm1);
+                __riscv_vse32_v_i32m1(outptr, __riscv_vget_v_i32m4_i32m1(_sum, 0), vl);
                 outptr += packn;
             }
 
             if (out_elempack == 1)
             {
-                __riscv_vsse32_v_i32m4(outptr, M * sizeof(int), _sum, vlm1);
+                __riscv_vsse32_v_i32m4(outptr, M * sizeof(int), _sum, vl);
                 outptr += 1;
             }
         }
@@ -344,9 +345,6 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
     #pragma omp parallel for num_threads(opt.num_threads)
     for (int p = remain_outch_start; p < outch; p++)
     {
-#if __riscv_vector
-        const size_t vlm1 = __riscv_vsetvlmax_e8m1();
-#endif
         int* outptr = top_blob.channel(p);
 
         int ij = 0;
