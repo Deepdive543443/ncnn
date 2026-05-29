@@ -22,9 +22,6 @@ Requantize_riscv::Requantize_riscv()
 #if __riscv_vector
 static void requantize_packnton_s8(const int* ptr0, const int* ptr1, const int* ptr2, const int* ptr3, signed char* s8ptr, const Mat& scale_in_data, const Mat& bias_data, const Mat& scale_out_data, int activation_type, const Mat& activation_params, int elemcount)
 {
-    // For VLEN256: int32x8 -> int8x32
-    // For VLEN128: int32x4 -> int8x16
-
     const size_t vlm8 = __riscv_vsetvlmax_e32m8();
     const size_t vlm4 = __riscv_vsetvlmax_e32m4();
     const size_t vlm1 = __riscv_vsetvlmax_e32m1();
@@ -586,10 +583,6 @@ int Requantize_riscv::forward(const Mat& bottom_blob, Mat& top_blob, const Optio
             out_elempack = w * elempack % packn_s8 == 0 ? packn_s8 : 1;
         }
 #endif
-        // int32 -> int8
-        // VLEN128: 4x32 or 16x8
-        // VLEN256: 8x32 or 32x8
-
         const int outw = w * elempack / out_elempack;
         const size_t out_elemsize = out_elempack * 1u;
 
@@ -617,7 +610,6 @@ int Requantize_riscv::forward(const Mat& bottom_blob, Mat& top_blob, const Optio
     {
         int out_elempack = 1;
 #if __riscv_vector
-        // Refreshing note: Elements was packed on Channel dimension
         if (opt.use_packing_layout)
         {
             out_elempack = h * elempack % packn_s8 == 0 ? packn_s8 : 1;
