@@ -390,73 +390,19 @@ int main(int argc, char** argv)
 
         benchmark("squeezenet_int8", ncnn::Mat(227, 227, 3), opt, squeezenet_int8_param_data);
 
-        benchmark("mobilenet", ncnn::Mat(224, 224, 3), opt, mobilenet_param_data);
-
         benchmark("mobilenet_int8", ncnn::Mat(224, 224, 3), opt, mobilenet_int8_param_data);
-
-        benchmark("mobilenet_v2", ncnn::Mat(224, 224, 3), opt, mobilenet_v2_param_data);
-
-        // benchmark("mobilenet_v2_int8", ncnn::Mat(224, 224, 3), opt, mobilenet_v2_int8_param_data);
-
-        benchmark("mobilenet_v3", ncnn::Mat(224, 224, 3), opt, mobilenet_v3_param_data);
-
-        benchmark("shufflenet", ncnn::Mat(224, 224, 3), opt, shufflenet_param_data);
-
-        benchmark("shufflenet_v2", ncnn::Mat(224, 224, 3), opt, shufflenet_v2_param_data);
-
-        benchmark("mnasnet", ncnn::Mat(224, 224, 3), opt, mnasnet_param_data);
-
-        benchmark("proxylessnasnet", ncnn::Mat(224, 224, 3), opt, proxylessnasnet_param_data);
-
-        benchmark("efficientnet_b0", ncnn::Mat(224, 224, 3), opt, efficientnet_b0_param_data);
-
-        benchmark("efficientnetv2_b0", ncnn::Mat(224, 224, 3), opt, efficientnetv2_b0_param_data);
-
-        benchmark("regnety_400m", ncnn::Mat(224, 224, 3), opt, regnety_400m_param_data);
-
-        benchmark("blazeface", ncnn::Mat(128, 128, 3), opt, blazeface_param_data);
-
-        benchmark("googlenet", ncnn::Mat(224, 224, 3), opt, googlenet_param_data);
 
         benchmark("googlenet_int8", ncnn::Mat(224, 224, 3), opt, googlenet_int8_param_data);
 
-        benchmark("resnet18", ncnn::Mat(224, 224, 3), opt, resnet18_param_data);
-
         benchmark("resnet18_int8", ncnn::Mat(224, 224, 3), opt, resnet18_int8_param_data);
-
-        benchmark("alexnet", ncnn::Mat(227, 227, 3), opt, alexnet_param_data);
-
-        benchmark("vgg16", ncnn::Mat(224, 224, 3), opt, vgg16_param_data);
 
         benchmark("vgg16_int8", ncnn::Mat(224, 224, 3), opt, vgg16_int8_param_data);
 
-        benchmark("resnet50", ncnn::Mat(224, 224, 3), opt, resnet50_param_data);
-
         benchmark("resnet50_int8", ncnn::Mat(224, 224, 3), opt, resnet50_int8_param_data);
-
-        benchmark("squeezenet_ssd", ncnn::Mat(300, 300, 3), opt, squeezenet_ssd_param_data);
 
         benchmark("squeezenet_ssd_int8", ncnn::Mat(300, 300, 3), opt, squeezenet_ssd_int8_param_data);
 
-        benchmark("mobilenet_ssd", ncnn::Mat(300, 300, 3), opt, mobilenet_ssd_param_data);
-
         benchmark("mobilenet_ssd_int8", ncnn::Mat(300, 300, 3), opt, mobilenet_ssd_int8_param_data);
-
-        benchmark("mobilenet_yolo", ncnn::Mat(416, 416, 3), opt, mobilenet_yolo_param_data);
-
-        benchmark("mobilenetv2_yolov3", ncnn::Mat(352, 352, 3), opt, mobilenetv2_yolov3_param_data);
-
-        benchmark("yolov4-tiny", ncnn::Mat(416, 416, 3), opt, yolov4_tiny_param_data);
-
-        benchmark("nanodet_m", ncnn::Mat(320, 320, 3), opt, nanodet_m_param_data);
-
-        benchmark("yolo-fastest-1.1", ncnn::Mat(320, 320, 3), opt, yolo_fastest_1_1_param_data);
-
-        benchmark("yolo-fastestv2", ncnn::Mat(352, 352, 3), opt, yolo_fastestv2_param_data);
-
-        benchmark("vision_transformer", ncnn::Mat(384, 384, 3), opt, vision_transformer_param_data);
-
-        benchmark("FastestDet", ncnn::Mat(352, 352, 3), opt, FastestDet_param_data);
     }
 #if NCNN_VULKAN
     delete g_blob_vkallocator;
