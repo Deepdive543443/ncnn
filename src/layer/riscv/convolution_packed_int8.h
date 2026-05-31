@@ -1,8 +1,5 @@
-// Copyright 2023 Tencent
+// Copyright 2026 Tencent
 // SPDX-License-Identifier: BSD-3-Clause
-
-// Ref: src/layer/arm/convolution_packed_int8.h
-//      src/layer/x86/convolution_packed_int8.h
 
 static void convolution_transform_kernel_packed_int8_rvv(const Mat& kernel, Mat& kernel_tm, int inch, int outch, int kernel_w, int kernel_h)
 {
@@ -16,7 +13,6 @@ static void convolution_transform_kernel_packed_int8_rvv(const Mat& kernel, Mat&
 #if __riscv_vector
     const size_t vlm1 = __riscv_vsetvlmax_e32m1();
     const size_t vlm4 = __riscv_vsetvlmax_e32m4();
-    const size_t vlm8 = __riscv_vsetvlmax_e32m8();
 
     const int packn = (int)vlm1;
     const int pack4n = (int)vlm4;
@@ -176,7 +172,6 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
 #if __riscv_vector
     const size_t vlm1 = __riscv_vsetvlmax_e32m1();
     const size_t vlm4 = __riscv_vsetvlmax_e32m4();
-    const size_t vlm8 = __riscv_vsetvlmax_e32m8();
 
     const int pack4n = (int)vlm4;
     const int packn = (int)vlm1;
@@ -354,10 +349,10 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
     remain_outch_start += nn_outch * pack4n;
 
     nn_outch = (outch - remain_outch_start) / packn;
+    const size_t vl = __riscv_vsetvl_e8m1(packn);
     #pragma omp parallel for num_threads(opt.num_threads)
     for (int pp = 0; pp < nn_outch; pp++)
     {
-        const size_t vl = __riscv_vsetvl_e8m1(packn);
         const int p = remain_outch_start + pp * packn;
         int* outptr = top_blob.channel(p / out_elempack);
 
@@ -550,7 +545,7 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
 
             if (elempack == pack4n)
             {
-                for (; q + vlm4 - 1 < inch; q += vlm4)
+                for (; q + pack4n - 1 < inch; q += pack4n)
                 {
                     const signed char* r0 = bottom_blob.channel(q / elempack).row<const signed char>(i * stride_h) + j * stride_w * elempack;
 
@@ -561,13 +556,13 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
                         vint8m1_t _w = __riscv_vle8_v_i8m1(kptr, vlm4);
                         vint16m2_t _s = __riscv_vwmul_vv_i16m2(_w, _r, vlm4);
                         _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm4);
-                        kptr += vlm4;
+                        kptr += pack4n;
                     }
                 }
             }
             else
             {
-                for (; q + vlm4 - 1 < inch; q += vlm4)
+                for (; q + pack4n - 1 < inch; q += pack4n)
                 {
                     const signed char* r0 = bottom_blob.channel(q / elempack).row<const signed char>(i * stride_h) + j * stride_w * elempack;
 
@@ -578,7 +573,7 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
                         vint8m1_t _w = __riscv_vle8_v_i8m1(kptr, vlm4);
                         vint16m2_t _s = __riscv_vwmul_vv_i16m2(_w, _r, vlm4);
                         _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm4);
-                        kptr += vlm4;
+                        kptr += pack4n;
                     }
                 }
             }
