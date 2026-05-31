@@ -14,20 +14,24 @@ static void convolution_transform_kernel_packed_int8_rvv(const Mat& kernel, Mat&
     // clang-format off
     // *INDENT-OFF*
 #if __riscv_vector
-    const int packn_s8 = csrr_vlenb();
-    const int packn = csrr_vlenb() / 4;
+    const size_t vlm1 = __riscv_vsetvlmax_e32m1();
+    const size_t vlm4 = __riscv_vsetvlmax_e32m4();
+    const size_t vlm8 = __riscv_vsetvlmax_e32m8();
 
-    if (outch >= packn_s8)
+    const int packn = (int)vlm1;
+    const int pack4n = (int)vlm4;
+
+    if (outch >= pack4n)
     {
-        if (inch >= packn_s8)
-            kernel_tm.create(maxk, inch / packn_s8 + inch % packn_s8, outch / packn_s8 + (outch % packn_s8) / packn + outch % packn, (size_t)(packn_s8 * packn_s8), packn_s8 * packn_s8);
+        if (inch >= pack4n)
+            kernel_tm.create(maxk, inch / pack4n + inch % pack4n, outch / pack4n + (outch % pack4n) / packn + outch % packn, (size_t)(pack4n * pack4n), pack4n * pack4n);
         else
-            kernel_tm.create(maxk, inch, outch / packn_s8 + (outch % packn_s8) / packn + outch % packn, (size_t)packn_s8, packn_s8);
+            kernel_tm.create(maxk, inch, outch / pack4n + (outch % pack4n) / packn + outch % packn, (size_t)pack4n, pack4n);
     }
     else if (outch >= packn)
     {
-        if (inch >= packn_s8)
-            kernel_tm.create(maxk, inch / packn_s8 + inch % packn_s8, outch / packn + outch % packn, (size_t)(packn_s8 * packn), packn_s8 * packn);
+        if (inch >= pack4n)
+            kernel_tm.create(maxk, inch / pack4n + inch % pack4n, outch / packn + outch % packn, (size_t)(pack4n * packn), pack4n * packn);
         else
             kernel_tm.create(maxk, inch, outch / packn + outch % packn, (size_t)packn, packn);
     }
@@ -35,8 +39,8 @@ static void convolution_transform_kernel_packed_int8_rvv(const Mat& kernel, Mat&
 #endif // __riscv_vector
     {
 #if __riscv_vector
-        if (inch >= packn_s8)
-            kernel_tm.create(maxk, inch / packn_s8 + inch % packn_s8, outch, (size_t)packn_s8, packn_s8);
+        if (inch >= pack4n)
+            kernel_tm.create(maxk, inch / pack4n + inch % pack4n, outch, (size_t)pack4n, pack4n);
         else
 #endif // __riscv_vector
             kernel_tm.create(maxk, inch, outch, (size_t)1u, 1);
@@ -46,22 +50,22 @@ static void convolution_transform_kernel_packed_int8_rvv(const Mat& kernel, Mat&
 
     int q = 0;
 #if __riscv_vector
-    for (; q + packn_s8 - 1 < outch; q += packn_s8)
+    for (; q + pack4n - 1 < outch; q += pack4n)
     {
         const signed char* kptr = (const signed char*)kernel + q * inch * maxk;
-        signed char* g00 = kernel_tm.channel(q / packn_s8);
+        signed char* g00 = kernel_tm.channel(q / pack4n);
 
         int p = 0;
-        for (; p + packn_s8 - 1 < inch; p += packn_s8)
+        for (; p + pack4n - 1 < inch; p += pack4n)
         {
             for (int k = 0; k < maxk; k++)
             {
-                for (size_t i = 0; i < packn_s8; i++)
+                for (size_t i = 0; i < pack4n; i++)
                 {
                     const signed char* src = kptr + (p + i) * maxk + k;
-                    vint8m1_t row = __riscv_vlse8_v_i8m1(src, inch * maxk, packn_s8);
-                    __riscv_vse8_v_i8m1(g00, row, packn_s8);
-                    g00 += packn_s8;
+                    vint8m1_t row = __riscv_vlse8_v_i8m1(src, inch * maxk, vlm4);
+                    __riscv_vse8_v_i8m1(g00, row, vlm4);
+                    g00 += pack4n;
                 }
             }
         }
@@ -70,24 +74,24 @@ static void convolution_transform_kernel_packed_int8_rvv(const Mat& kernel, Mat&
             for (int k = 0; k < maxk; k++)
             {
                 const signed char* src = kptr + p * maxk + k;
-                vint8m1_t row = __riscv_vlse8_v_i8m1(src, inch * maxk, packn_s8);
-                __riscv_vse8_v_i8m1(g00, row, packn_s8);
-                g00 += packn_s8;
+                vint8m1_t row = __riscv_vlse8_v_i8m1(src, inch * maxk, vlm4);
+                __riscv_vse8_v_i8m1(g00, row, vlm4);
+                g00 += pack4n;
             }
         }
     }
     for (; q + packn - 1 < outch; q += packn)
     {
         const signed char* kptr = (const signed char*)kernel + q * inch * maxk;
-        signed char* g00 = kernel_tm.channel(q / packn_s8 + (q % packn_s8) / packn);
+        signed char* g00 = kernel_tm.channel(q / pack4n + (q % pack4n) / packn);
         int p = 0;
         for (; p < inch; p++)
         {
             for (int k = 0; k < maxk; k++)
             {
                 const signed char* src = kptr + p * maxk + k;
-                vint8m1_t row = __riscv_vlse8_v_i8m1(src, inch * maxk, packn);
-                __riscv_vse8_v_i8m1(g00, row, packn);
+                vint8m1_t row = __riscv_vlse8_v_i8m1(src, inch * maxk, vlm1);
+                __riscv_vse8_v_i8m1(g00, row, vlm1);
                 g00 += packn;
             }
         }
@@ -97,27 +101,27 @@ static void convolution_transform_kernel_packed_int8_rvv(const Mat& kernel, Mat&
     {
         const signed char* kptr = (const signed char*)kernel + q * inch * maxk;
 #if __riscv_vector
-        signed char* g00 = kernel_tm.channel(q / packn_s8 + (q % packn_s8) / packn + q % packn);
+        signed char* g00 = kernel_tm.channel(q / pack4n + (q % pack4n) / packn + q % packn);
 #else
         signed char* g00 = kernel_tm.channel(q);
 #endif
 
         int p = 0;
 #if __riscv_vector
-        for (; p + packn_s8 - 1 < inch; p += packn_s8)
+        for (; p + pack4n - 1 < inch; p += pack4n)
         {
             for (int k = 0; k < maxk; k++)
             {
                 const signed char* k0 = kptr + k;
 
-                for (size_t i = 0; i < packn_s8; i++)
+                for (size_t i = 0; i < pack4n; i++)
                 {
                     g00[0] = k0[0];
                     k0 += maxk;
                     g00 += 1;
                 }
             }
-            kptr += maxk * packn_s8;
+            kptr += maxk * pack4n;
         }
 #endif // __riscv_vector
         for (; p < inch; p++)
@@ -170,17 +174,19 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
     int nn_outch = 0;
     int remain_outch_start = 0;
 #if __riscv_vector
-    const size_t vlm1 = __riscv_vsetvlmax_e8m1();
-    const size_t packn_s8 = csrr_vlenb();
-    const size_t packn = csrr_vlenb() / 4;
+    const size_t vlm1 = __riscv_vsetvlmax_e32m1();
+    const size_t vlm4 = __riscv_vsetvlmax_e32m4();
+    const size_t vlm8 = __riscv_vsetvlmax_e32m8();
 
-    nn_outch = (outch - remain_outch_start) / packn_s8;
+    const int pack4n = (int)vlm4;
+    const int packn = (int)vlm1;
+
+    nn_outch = (outch - remain_outch_start) / pack4n;
     #pragma omp parallel for num_threads(opt.num_threads)
     for (int pp = 0; pp < nn_outch; pp++)
     {
-        const size_t vlm1 = __riscv_vsetvlmax_e8m1();
 
-        const int p = remain_outch_start + pp * packn_s8;
+        const int p = remain_outch_start + pp * pack4n;
         int* outptr = top_blob.channel(p / out_elempack);
 
         int ij = 0;
@@ -189,37 +195,37 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
             const int i = ij / outw;
             const int j = ij % outw;
 
-            vint32m4_t _sum = __riscv_vmv_v_x_i32m4(0, vlm1);
-            const signed char* kptr = weight_data_tm.channel(p / packn_s8);
+            vint32m4_t _sum = __riscv_vmv_v_x_i32m4(0, vlm4);
+            const signed char* kptr = weight_data_tm.channel(p / pack4n);
 
             int q = 0;
-            for (; q + packn_s8 - 1 < inch; q += packn_s8)
+            for (; q + pack4n - 1 < inch; q += pack4n)
             {
                 const signed char* r0 = bottom_blob.channel(q / elempack).row<const signed char>(i * stride_h) + j * stride_w * elempack;
 
                 for (int k = 0; k < maxk; k++)
                 {
                     const signed char* r0s = r0 + space_ofs[k];
-                    if (elempack == packn_s8)
+                    if (elempack == pack4n)
                     {
-                        for (int z = 0; z < packn_s8; z++)
+                        for (int z = 0; z < pack4n; z++)
                         {
-                            vint8m1_t _w = __riscv_vle8_v_i8m1(kptr, vlm1);
-                            vint16m2_t _s = __riscv_vwmul_vx_i16m2(_w, r0s[z], vlm1);
-                            _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm1);
+                            vint8m1_t _w = __riscv_vle8_v_i8m1(kptr, vlm4);
+                            vint16m2_t _s = __riscv_vwmul_vx_i16m2(_w, r0s[z], vlm4);
+                            _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm4);
 
-                            kptr += packn_s8;
+                            kptr += pack4n;
                         }
                     }
                     else
                     {
-                        for (int z = 0; z < packn_s8; z++)
+                        for (int z = 0; z < pack4n; z++)
                         {
-                            vint8m1_t _w = __riscv_vle8_v_i8m1(kptr, vlm1);
-                            vint16m2_t _s = __riscv_vwmul_vx_i16m2(_w, r0s[z * N], vlm1);
-                            _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm1);
+                            vint8m1_t _w = __riscv_vle8_v_i8m1(kptr, vlm4);
+                            vint16m2_t _s = __riscv_vwmul_vx_i16m2(_w, r0s[z * N], vlm4);
+                            _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm4);
 
-                            kptr += packn_s8;
+                            kptr += pack4n;
                         }
                     }
                 }
@@ -232,32 +238,32 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
                 for (int k = 0; k < maxk; k++)
                 {
                     const signed char* r0s = r0 + space_ofs[k];
-                    vint8m1_t _w = __riscv_vle8_v_i8m1(kptr, vlm1);
-                    vint16m2_t _s = __riscv_vwmul_vx_i16m2(_w, r0s[0], vlm1);
-                    _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm1);
+                    vint8m1_t _w = __riscv_vle8_v_i8m1(kptr, vlm4);
+                    vint16m2_t _s = __riscv_vwmul_vx_i16m2(_w, r0s[0], vlm4);
+                    _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm4);
 
-                    kptr += packn_s8;
+                    kptr += pack4n;
                 }
             }
 
             if (out_elempack == packn)
             {
-                __riscv_vse32_v_i32m1(outptr, __riscv_vget_v_i32m4_i32m1(_sum, 0), __riscv_vsetvlmax_e32m1());
-                __riscv_vse32_v_i32m1(outptr + M, __riscv_vget_v_i32m4_i32m1(_sum, 1), __riscv_vsetvlmax_e32m1());
-                __riscv_vse32_v_i32m1(outptr + M * 2, __riscv_vget_v_i32m4_i32m1(_sum, 2), __riscv_vsetvlmax_e32m1());
-                __riscv_vse32_v_i32m1(outptr + M * 3, __riscv_vget_v_i32m4_i32m1(_sum, 3), __riscv_vsetvlmax_e32m1());
+                __riscv_vse32_v_i32m1(outptr, __riscv_vget_v_i32m4_i32m1(_sum, 0), vlm1);
+                __riscv_vse32_v_i32m1(outptr + M, __riscv_vget_v_i32m4_i32m1(_sum, 1), vlm1);
+                __riscv_vse32_v_i32m1(outptr + M * 2, __riscv_vget_v_i32m4_i32m1(_sum, 2), vlm1);
+                __riscv_vse32_v_i32m1(outptr + M * 3, __riscv_vget_v_i32m4_i32m1(_sum, 3), vlm1);
                 outptr += packn;
             }
 
             if (out_elempack == 1)
             {
-                __riscv_vsse32_v_i32m4(outptr, M * sizeof(int), _sum, vlm1);
+                __riscv_vsse32_v_i32m4(outptr, M * sizeof(int), _sum, vlm4);
                 outptr += 1;
             }
         }
     }
 
-    remain_outch_start += nn_outch * packn_s8;
+    remain_outch_start += nn_outch * pack4n;
     nn_outch = (outch - remain_outch_start) / packn;
     #pragma omp parallel for num_threads(opt.num_threads)
     for (int pp = 0; pp < nn_outch; pp++)
@@ -273,15 +279,15 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
             const int j = ij % outw;
 
             vint32m4_t _sum = __riscv_vmv_v_x_i32m4(0, vl);
-            const signed char* kptr = weight_data_tm.channel(p / packn_s8 + (p % packn_s8) / packn);
+            const signed char* kptr = weight_data_tm.channel(p / pack4n + (p % pack4n) / packn);
             int q = 0;
-            for (; q + packn_s8 - 1 < inch; q += packn_s8)
+            for (; q + pack4n - 1 < inch; q += pack4n)
             {
                 const signed char* r0 = bottom_blob.channel(q / elempack).row<const signed char>(i * stride_h) + j * stride_w * elempack;
 
-                if (elempack == packn_s8)
+                if (elempack == pack4n)
                 {
-                    for (int z = 0; z < packn_s8; z++)
+                    for (int z = 0; z < pack4n; z++)
                     {
                         for (int k = 0; k < maxk; k++)
                         {
@@ -296,7 +302,7 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
                 }
                 else
                 {
-                    for (int z = 0; z < packn_s8; z++)
+                    for (int z = 0; z < pack4n; z++)
                     {
                         for (int k = 0; k < maxk; k++)
                         {
@@ -355,51 +361,51 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
 
             int sum = 0;
 #if __riscv_vector
-            const signed char* kptr = weight_data_tm.channel(p / packn_s8 + (p % packn_s8) / packn + p % packn);
+            const signed char* kptr = weight_data_tm.channel(p / pack4n + (p % pack4n) / packn + p % packn);
 #else
             const signed char* kptr = weight_data_tm.channel(p);
 #endif
             int q = 0;
 #if __riscv_vector
-            vint32m4_t _sum = __riscv_vmv_v_x_i32m4(0, vlm1);
+            vint32m4_t _sum = __riscv_vmv_v_x_i32m4(0, vlm4);
 
-            if (elempack == packn_s8)
+            if (elempack == pack4n)
             {
-                for (; q + vlm1 - 1 < inch; q += vlm1)
+                for (; q + vlm4 - 1 < inch; q += vlm4)
                 {
                     const signed char* r0 = bottom_blob.channel(q / elempack).row<const signed char>(i * stride_h) + j * stride_w * elempack;
 
                     for (int k = 0; k < maxk; k++)
                     {
                         const signed char* r0s = r0 + space_ofs[k];
-                        vint8m1_t _r = __riscv_vle8_v_i8m1(r0s, vlm1);
-                        vint8m1_t _w = __riscv_vle8_v_i8m1(kptr, vlm1);
-                        vint16m2_t _s = __riscv_vwmul_vv_i16m2(_w, _r, vlm1);
-                        _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm1);
-                        kptr += vlm1;
+                        vint8m1_t _r = __riscv_vle8_v_i8m1(r0s, vlm4);
+                        vint8m1_t _w = __riscv_vle8_v_i8m1(kptr, vlm4);
+                        vint16m2_t _s = __riscv_vwmul_vv_i16m2(_w, _r, vlm4);
+                        _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm4);
+                        kptr += vlm4;
                     }
                 }
             }
             else
             {
-                for (; q + vlm1 - 1 < inch; q += vlm1)
+                for (; q + vlm4 - 1 < inch; q += vlm4)
                 {
                     const signed char* r0 = bottom_blob.channel(q / elempack).row<const signed char>(i * stride_h) + j * stride_w * elempack;
 
                     for (int k = 0; k < maxk; k++)
                     {
                         const signed char* r0s = r0 + space_ofs[k];
-                        vint8m1_t _r = __riscv_vlse8_v_i8m1(r0s, N, vlm1);
-                        vint8m1_t _w = __riscv_vle8_v_i8m1(kptr, vlm1);
-                        vint16m2_t _s = __riscv_vwmul_vv_i16m2(_w, _r, vlm1);
-                        _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm1);
-                        kptr += vlm1;
+                        vint8m1_t _r = __riscv_vlse8_v_i8m1(r0s, N, vlm4);
+                        vint8m1_t _w = __riscv_vle8_v_i8m1(kptr, vlm4);
+                        vint16m2_t _s = __riscv_vwmul_vv_i16m2(_w, _r, vlm4);
+                        _sum = __riscv_vwadd_wv_i32m4(_sum, _s, vlm4);
+                        kptr += vlm4;
                     }
                 }
             }
 
-            vint32m1_t _sum0 = __riscv_vmv_v_x_i32m1(0, __riscv_vsetvlmax_e32m1());
-            _sum0 = __riscv_vredsum_vs_i32m4_i32m1(_sum, _sum0, __riscv_vsetvlmax_e32m4());
+            vint32m1_t _sum0 = __riscv_vmv_v_x_i32m1(0, vlm1);
+            _sum0 = __riscv_vredsum_vs_i32m4_i32m1(_sum, _sum0, vlm4);
             sum += __riscv_vmv_x_s_i32m1_i32(_sum0);
 #endif
             for (; q < inch; q++)
