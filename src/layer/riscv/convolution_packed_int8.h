@@ -180,7 +180,6 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
     #pragma omp parallel for num_threads(opt.num_threads)
     for (int pp = 0; pp < nn_outch; pp++)
     {
-
         const int p = remain_outch_start + pp * pack4n;
         int* outptr = top_blob.channel(p / out_elempack);
 
@@ -483,7 +482,7 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
             vint32m4_t _sum = __riscv_vmv_v_x_i32m4(0, vl);
             const signed char* kptr = weight_data_tm.channel(p / pack4n + (p % pack4n) / packn);
             int q = 0;
-            
+
             if (elempack == pack4n)
             {
                 for (; q + pack4n - 1 < inch; q += pack4n)
@@ -562,7 +561,7 @@ static void convolution_packed_int8_rvv(const Mat& bottom_blob, Mat& top_blob, c
         int* outptr = top_blob.channel(p);
 
         int ij = 0;
-        for (; ij + 1 < outw * outh; ij+=2)
+        for (; ij + 1 < outw * outh; ij += 2)
         {
             const int i0 = ij / outw;
             const int j0 = ij % outw;
