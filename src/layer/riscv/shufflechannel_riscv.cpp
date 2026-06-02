@@ -371,21 +371,27 @@ int ShuffleChannel_riscv::forward(const Mat& bottom_blob, Mat& top_blob, const O
         {
             size_t vl;
             vl = __riscv_vsetvl_e32m4(_group * elempack);
-#if C906 || __riscv_xtheadvector
-            // C906 don't have vlm
-            vuint32m4_t _idx = __riscv_vle32_v_u32m4(index_c906, vl);
-#else
-            // create bitmask
-            vbool8_t _mask = __riscv_vlm_v_b8(bitmask, vl);
-            vuint32m4_t _idx_init = __riscv_viota_m_u32m4(_mask, vl);
-            vuint32m4_t _idx = __riscv_vadd_vx_u32m4(_idx_init, (_group - 1) * elempack, vl);
-            for (int shift = _group - 2; shift >= 0; shift--)
+
+            // Build the shuffle-gather index on the scalar side. The earlier
+            // RVV-path construction used
+            //     viota_m(_mask) + vslideup_vx(vundefined, ...) + vmerge
+            // which depends on the values of mask/tail-agnostic lanes coming
+            // out of vundefined and vslideup, i.e. on the implementation's
+            // choice for RVV agnostic semantics. That produced correct
+            // results on QEMU but wrong results on real silicon where the
+            // agnostic lanes do not match the QEMU default. The table-load
+            // approach is fully defined under the spec and matches what the
+            // C906 / xtheadvector path was already doing.
+            // Lane k of the gather index must be (k % _group) * elempack + (k / _group).
+            static unsigned int gather_index[4 * 32]; // _group <= 4, packn = vlenb/4 <= 32
+            for (int i = 0; i < _group; i++)
             {
-                vuint32m4_t _idx_lower = __riscv_vadd_vx_u32m4(_idx_init, shift * elempack, vl);
-                _idx = __riscv_vslideup_vx_u32m4(__riscv_vundefined_u32m4(), _idx, 1, vl);
-                _idx = __riscv_vmerge_vvm_u32m4(_idx, _idx_lower, _mask, vl);
+                for (int j = 0; j < elempack; j++)
+                {
+                    gather_index[j * _group + i] = j + i * elempack;
+                }
             }
-#endif
+            vuint32m4_t _idx = __riscv_vle32_v_u32m4(gather_index, vl);
 
             for (int q = 0; q < channels_per_group; q++)
             {
@@ -462,17 +468,19 @@ int ShuffleChannel_riscv::forward(const Mat& bottom_blob, Mat& top_blob, const O
         {
             size_t vl;
             vl = __riscv_vsetvl_e32m8(_group * elempack);
-            // create bitmask
-            vbool4_t _mask = __riscv_vlm_v_b4(bitmask, vl);
-            vuint32m8_t _idx_init = __riscv_viota_m_u32m8(_mask, vl);
-            vuint32m8_t _idx = __riscv_vadd_vx_u32m8(_idx_init, (_group - 1) * elempack, vl);
 
-            for (int shift = _group - 2; shift >= 0; shift--)
+            // See the comment in the `_group <= 4` block above for the
+            // rationale: build a fully-defined gather index on the scalar
+            // side instead of relying on RVV agnostic-lane semantics.
+            static unsigned int gather_index[8 * 32]; // _group <= 8, packn = vlenb/4 <= 32
+            for (int i = 0; i < _group; i++)
             {
-                vuint32m8_t _idx_lower = __riscv_vadd_vx_u32m8(_idx_init, shift * elempack, vl);
-                _idx = __riscv_vslideup_vx_u32m8(__riscv_vundefined_u32m8(), _idx, 1, vl);
-                _idx = __riscv_vmerge_vvm_u32m8(_idx, _idx_lower, _mask, vl);
+                for (int j = 0; j < elempack; j++)
+                {
+                    gather_index[j * _group + i] = j + i * elempack;
+                }
             }
+            vuint32m8_t _idx = __riscv_vle32_v_u32m8(gather_index, vl);
 
             for (int q = 0; q < channels_per_group; q++)
             {
@@ -915,21 +923,19 @@ int ShuffleChannel_riscv::forward_bf16s_fp16s(const Mat& bottom_blob, Mat& top_b
         {
             size_t vl;
             vl = __riscv_vsetvl_e16m4(_group * elempack);
-#if C906 || __riscv_xtheadvector
-            // C906 don't have vlm
-            vuint16m4_t _idx = __riscv_vle16_v_u16m4(index_c906, vl);
-#else
-            // create bitmask
-            vbool4_t _mask = __riscv_vlm_v_b4(bitmask, vl);
-            vuint16m4_t _idx_init = __riscv_viota_m_u16m4(_mask, vl);
-            vuint16m4_t _idx = __riscv_vadd_vx_u16m4(_idx_init, (_group - 1) * elempack, vl);
-            for (int shift = _group - 2; shift >= 0; shift--)
+
+            // See the comment in the fp32 forward() `_group <= 4` block for
+            // the rationale: build a fully-defined gather index on the
+            // scalar side instead of relying on RVV agnostic-lane semantics.
+            static unsigned short gather_index[4 * 64]; // _group <= 4, packn = vlenb/2 <= 64
+            for (int i = 0; i < _group; i++)
             {
-                vuint16m4_t _idx_lower = __riscv_vadd_vx_u16m4(_idx_init, shift * elempack, vl);
-                _idx = __riscv_vslideup_vx_u16m4(__riscv_vundefined_u16m4(), _idx, 1, vl);
-                _idx = __riscv_vmerge_vvm_u16m4(_idx, _idx_lower, _mask, vl);
+                for (int j = 0; j < elempack; j++)
+                {
+                    gather_index[j * _group + i] = (unsigned short)(j + i * elempack);
+                }
             }
-#endif
+            vuint16m4_t _idx = __riscv_vle16_v_u16m4(gather_index, vl);
 
             for (int q = 0; q < channels_per_group; q++)
             {
@@ -1002,21 +1008,19 @@ int ShuffleChannel_riscv::forward_bf16s_fp16s(const Mat& bottom_blob, Mat& top_b
         {
             size_t vl;
             vl = __riscv_vsetvl_e16m8(_group * elempack);
-            // create bitmask
-#if C906 || __riscv_xtheadvector
-            // C906 don't have vlm
-            vuint16m8_t _idx = __riscv_vle16_v_u16m8(index_c906, vl);
-#else
-            vbool2_t _mask = __riscv_vlm_v_b2(bitmask, vl);
-            vuint16m8_t _idx_init = __riscv_viota_m_u16m8(_mask, vl);
-            vuint16m8_t _idx = __riscv_vadd_vx_u16m8(_idx_init, (_group - 1) * elempack, vl);
-            for (int shift = _group - 2; shift >= 0; shift--)
+
+            // See the comment in the fp32 forward() `_group <= 4` block for
+            // the rationale: build a fully-defined gather index on the
+            // scalar side instead of relying on RVV agnostic-lane semantics.
+            static unsigned short gather_index[8 * 64]; // _group <= 8, packn = vlenb/2 <= 64
+            for (int i = 0; i < _group; i++)
             {
-                vuint16m8_t _idx_lower = __riscv_vadd_vx_u16m8(_idx_init, shift * elempack, vl);
-                _idx = __riscv_vslideup_vx_u16m8(__riscv_vundefined_u16m8(), _idx, 1, vl);
-                _idx = __riscv_vmerge_vvm_u16m8(_idx, _idx_lower, _mask, vl);
+                for (int j = 0; j < elempack; j++)
+                {
+                    gather_index[j * _group + i] = (unsigned short)(j + i * elempack);
+                }
             }
-#endif
+            vuint16m8_t _idx = __riscv_vle16_v_u16m8(gather_index, vl);
 
             for (int q = 0; q < channels_per_group; q++)
             {
