@@ -62,7 +62,9 @@ int ShuffleChannel_riscv::forward(const Mat& bottom_blob, Mat& top_blob, const O
 
     int elempack = bottom_blob.elempack;
     int channels = bottom_blob.c;
+#if !__riscv_vector
     size_t elemsize = bottom_blob.elemsize;
+#endif
 
     int _group = reverse ? channels * elempack / group : group;
 
@@ -581,6 +583,28 @@ int ShuffleChannel_riscv::forward(const Mat& bottom_blob, Mat& top_blob, const O
 
         return 0;
     }
+
+    if (elempack != 1)
+    {
+        Option opt_pack = opt;
+        opt_pack.blob_allocator = opt.workspace_allocator;
+
+        Mat bottom_blob_unpacked;
+        convert_packing(bottom_blob, bottom_blob_unpacked, 1, opt_pack);
+        if (bottom_blob_unpacked.empty())
+            return -100;
+
+        Mat top_blob_unpacked;
+        int ret = ShuffleChannel::forward(bottom_blob_unpacked, top_blob_unpacked, opt_pack);
+        if (ret != 0)
+            return ret;
+
+        convert_packing(top_blob_unpacked, top_blob, elempack, opt);
+        if (top_blob.empty())
+            return -100;
+
+        return 0;
+    }
 #endif // __riscv_vector
 
 #if __riscv_vector
@@ -637,7 +661,9 @@ int ShuffleChannel_riscv::forward_bf16s_fp16s(const Mat& bottom_blob, Mat& top_b
 {
     int elempack = bottom_blob.elempack;
     int channels = bottom_blob.c;
+#if !__riscv_vector
     size_t elemsize = bottom_blob.elemsize;
+#endif
 
     int _group = reverse ? channels * elempack / group : group;
 
@@ -1120,6 +1146,28 @@ int ShuffleChannel_riscv::forward_bf16s_fp16s(const Mat& bottom_blob, Mat& top_b
                 }
             }
         }
+        return 0;
+    }
+
+    if (elempack != 1)
+    {
+        Option opt_pack = opt;
+        opt_pack.blob_allocator = opt.workspace_allocator;
+
+        Mat bottom_blob_unpacked;
+        convert_packing(bottom_blob, bottom_blob_unpacked, 1, opt_pack);
+        if (bottom_blob_unpacked.empty())
+            return -100;
+
+        Mat top_blob_unpacked;
+        int ret = ShuffleChannel::forward(bottom_blob_unpacked, top_blob_unpacked, opt_pack);
+        if (ret != 0)
+            return ret;
+
+        convert_packing(top_blob_unpacked, top_blob, elempack, opt);
+        if (top_blob.empty())
+            return -100;
+
         return 0;
     }
 #endif // __riscv_vector
